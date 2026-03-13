@@ -1,0 +1,429 @@
+# import pygame
+# pygame.init()
+# win = pygame.display.set_mode((500,500))
+# pygame.display.set_caption("First Game")
+# x= 50
+# y = 50
+# width = 40 
+# height = 60
+# vel = 5
+
+# bg = pygame.transform.scale(pygame.image.load("lock.png"), (500, 500))
+
+# def redrawGameWindow():
+ #   win.blit(bg, (0, 0))
+ #   pygame.draw.rect(win, (255, 0, 0), (x, y, width, height))
+  #  pygame.display.update()
+
+
+
+# run = True
+# while run:
+#    pygame.time.delay(100)
+    
+
+ #   for event in pygame.event.get():
+ #       if event.type == pygame.QUIT:
+ #           run = False
+
+  #  keys = pygame.key.get_pressed()
+
+  #  if keys[pygame.K_LEFT] and x > vel:
+ #       x -=vel
+ #   if keys[pygame.K_RIGHT] and x < 500 - width - vel:
+ #       x += vel
+ #   if keys[pygame.K_UP] and y > vel:
+ #       y -= vel
+ #   if keys[pygame.K_DOWN] and y < 500 - height - vel:
+ #       y += vel
+ #   redrawGameWindow()
+    
+
+# pygame.quit()
+
+import pygame
+import random
+import math
+
+pygame.init()
+
+WIDTH, HEIGHT = 900, 650
+WIN = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Grainger Bob – Room Reconstruction")
+
+# ── palette ──────────────────────────────────────────────────────────────────
+C_BG           = (18, 14, 10)
+C_TEXT         = (220, 200, 160)
+C_ACCENT       = (180, 120, 40)
+C_PANEL_BG     = (22, 17, 12)
+C_PANEL_BORDER = (120, 90, 40)
+C_TILE_BG      = (50, 38, 24)
+C_SOLVED       = (80, 160, 90)
+C_FOUND        = (255, 220, 80)
+
+FONT_TITLE  = pygame.font.SysFont("Georgia", 26, bold=True)
+FONT_BODY   = pygame.font.SysFont("Georgia", 17)
+FONT_SMALL  = pygame.font.SysFont("Georgia", 13)
+FONT_TILE   = pygame.font.SysFont("Courier New", 30, bold=True)
+
+# ── unknown language glyphs (7x9 pixel grids) ────────────────────────────────
+GLYPHS = {
+    "A": [
+        [0,0,1,1,1,0,0],
+        [0,1,0,0,0,1,0],
+        [1,0,0,0,0,0,1],
+        [1,1,1,1,1,1,1],
+        [1,0,0,0,0,0,1],
+        [1,0,0,0,0,0,1],
+        [0,0,0,1,0,0,0],
+        [0,0,1,0,1,0,0],
+        [0,1,0,0,0,1,0],
+    ],
+    "B": [
+        [1,1,1,0,0,0,0],
+        [1,0,0,1,0,0,0],
+        [1,0,0,0,1,0,1],
+        [1,1,1,0,0,1,0],
+        [1,0,0,1,0,0,0],
+        [1,0,0,0,1,0,0],
+        [1,1,1,1,0,0,0],
+        [0,0,1,0,0,0,0],
+        [0,1,0,0,1,0,1],
+    ],
+    "C": [
+        [0,1,1,1,1,0,0],
+        [1,0,0,0,0,1,0],
+        [1,0,0,0,0,0,0],
+        [1,0,1,0,0,0,1],
+        [1,0,0,0,0,0,0],
+        [1,0,0,0,0,1,0],
+        [0,1,1,1,1,0,0],
+        [0,0,0,1,0,0,0],
+        [1,0,1,0,1,0,1],
+    ],
+    "D": [
+        [1,1,1,1,0,0,0],
+        [1,0,0,0,1,0,0],
+        [1,0,0,0,0,1,0],
+        [1,0,1,0,0,1,0],
+        [1,0,0,0,0,1,0],
+        [1,0,0,0,1,0,0],
+        [1,1,1,1,0,0,0],
+        [0,1,0,0,0,1,0],
+        [1,0,0,1,0,0,1],
+    ],
+}
+
+def draw_glyph(surface, glyph_key, x, y, cell=4, color=(200,185,140)):
+    grid = GLYPHS[glyph_key]
+    for row_i, row in enumerate(grid):
+        for col_i, val in enumerate(row):
+            if val:
+                pygame.draw.rect(surface, color,
+                    (x + col_i*cell, y + row_i*cell, cell-1, cell-1))
+
+# ── pixel art room painters ───────────────────────────────────────────────────
+def px(surface, color, grid_x, grid_y, w=1, h=1, scale=8):
+    pygame.draw.rect(surface, color,
+        (grid_x*scale, grid_y*scale, w*scale, h*scale))
+
+def draw_room_care(surface, W, H):
+    s=8
+    for gx in range(W//s):
+        for gy in range(H//s):
+            c=(45,38,30) if (gx+gy)%2==0 else (40,33,26)
+            px(surface,c,gx,gy)
+    for gx in range(W//s):
+        for gy in range(4):
+            px(surface,(55,48,40),gx,gy)
+    for gx in range(8,20):
+        for gy in range(1,4):
+            px(surface,(200,210,200),gx,gy)
+    pygame.draw.rect(surface,(80,80,80),(8*s,1*s,12*s,3*s),2)
+    for gx in range(4,24):
+        px(surface,(100,75,50),gx,9)
+    for gx in range(5,23):
+        for gy in range(10,13):
+            px(surface,(120,90,60),gx,gy)
+    for gx in range(6,10):
+        px(surface,(70,55,40),gx,13)
+    for gx in range(6,10):
+        for gy in range(14,17):
+            px(surface,(80,60,45),gx,gy)
+    for gx in range(11,16):
+        for gy in range(7,9):
+            px(surface,(60,60,70),gx,gy)
+    for gx in range(11,16):
+        px(surface,(40,40,50),gx,9)
+    colors=[(160,40,40),(40,100,160),(40,140,80)]
+    for i,bc in enumerate(colors):
+        for gy in range(9,12):
+            px(surface,bc,19+i,gy)
+    for gx in range(23,27):
+        for gy in range(1,4):
+            px(surface,(140,180,210),gx,gy)
+    pygame.draw.rect(surface,(80,70,55),(23*s,1*s,4*s,3*s),2)
+
+def draw_room_bell(surface, W, H):
+    s=8
+    for gx in range(W//s):
+        for gy in range(H//s):
+            shade=50+((gx*3+gy*7)%15)
+            px(surface,(shade,shade-5,shade-10),gx,gy)
+    for gx in range(W//s):
+        for gy in range(5):
+            shade=70+(gx%4)*5
+            px(surface,(shade,shade-3,shade-8),gx,gy)
+    for gx in range(9,21):
+        for gy in range(3,6):
+            px(surface,(120,170,210),gx,gy)
+    pygame.draw.polygon(surface,(180,150,50),[
+        (14*s,1*s),(18*s,1*s),(20*s,4*s),(12*s,4*s)])
+    pygame.draw.circle(surface,(160,130,40),(16*s,4*s),s//2)
+    for gy in range(H//s):
+        px(surface,(90,80,70),2,gy,2,1)
+    for gy in range(H//s):
+        px(surface,(90,80,70),26,gy,2,1)
+    for gx in range(0,W//s,4):
+        pygame.draw.line(surface,(60,55,50),(gx*s,5*s),(gx*s,H),1)
+
+def draw_room_balcony(surface, W, H):
+    s=8
+    for gy in range(H//s):
+        t=gy/(H//s)
+        r=int(30+t*20); g=int(40+t*25); b=int(60+t*30)
+        for gx in range(W//s):
+            px(surface,(r,g,b),gx,gy)
+    for gx in range(W//s):
+        for gy in range(14,H//s):
+            px(surface,(70,60,50),gx,gy)
+    for gx in range(0,W//s,3):
+        for gy in range(10,14):
+            px(surface,(100,90,80),gx,gy)
+    for gx in range(W//s):
+        px(surface,(120,110,100),gx,10)
+    glass=pygame.Surface((28*s,3*s),pygame.SRCALPHA)
+    glass.fill((140,180,220,60))
+    surface.blit(glass,(0,11*s))
+    for bx,bw,bh,bc in [(0,4,6,(40,50,60)),(5,3,8,(35,45,55)),
+                         (9,5,5,(45,55,65)),(20,6,7,(38,48,58)),(27,3,4,(42,52,62))]:
+        for gx in range(bx,bx+bw):
+            for gy in range(10-bh,10):
+                px(surface,bc,gx,gy)
+    for gx in range(24,27):
+        px(surface,(100,70,40),gx,13)
+    for gy in range(12,14):
+        for gx in range(24,27):
+            px(surface,(110,80,50),gx,gy)
+    pygame.draw.circle(surface,(40,100,50),(25*s,11*s),s+2)
+    pygame.draw.circle(surface,(35,90,45),(26*s,10*s),s)
+
+def draw_room_cbtf(surface, W, H):
+    s=8
+    for gx in range(W//s):
+        for gy in range(H//s):
+            c=28+(gx+gy)%6
+            px(surface,(c,c-2,c-4),gx,gy)
+    for gx in range(W//s):
+        px(surface,(60,55,50),gx,0)
+        if gx%6==0:
+            for gy in range(1,3):
+                px(surface,(70,65,55),gx,gy)
+    for row in range(2):
+        base_y=6+row*7
+        for col in range(4):
+            base_x=2+col*7
+            for gx in range(base_x,base_x+5):
+                px(surface,(55,45,35),gx,base_y+3)
+            for gx in range(base_x+1,base_x+4):
+                for gy in range(base_y,base_y+3):
+                    px(surface,(30,80,50),gx,gy)
+            px(surface,(60,180,100),base_x+2,base_y+1)
+            px(surface,(50,45,40),base_x+2,base_y+3)
+    pygame.draw.circle(surface,(180,40,40),(2*s,2*s),s//2)
+
+# ── room setup ────────────────────────────────────────────────────────────────
+ROOM_W, ROOM_H = 232, 168
+
+ROOMS = [
+    {"id":0,"label":"CARE – 4th Floor","painter":draw_room_care,
+     "glyph_pos":(9*8+3, 2*8+2),"glyph_key":"A","glyph_color":(190,195,180),"found":False,"surface":None},
+    {"id":1,"label":"Bell Tower – 2nd Floor","painter":draw_room_bell,
+     "glyph_pos":(3*8, 5*8+4),"glyph_key":"B","glyph_color":(85,76,66),"found":False,"surface":None},
+    {"id":2,"label":"Balcony – 3rd Floor","painter":draw_room_balcony,
+     "glyph_pos":(14*8-2, 10*8+2),"glyph_key":"C","glyph_color":(130,160,200),"found":False,"surface":None},
+    {"id":3,"label":"CBTF – Basement","painter":draw_room_cbtf,
+     "glyph_pos":(6*8, 1*8+2),"glyph_key":"D","glyph_color":(58,53,48),"found":False,"surface":None},
+]
+
+for room in ROOMS:
+    surf = pygame.Surface((ROOM_W, ROOM_H))
+    room["painter"](surf, ROOM_W, ROOM_H)
+    room["surface"] = surf
+
+ROOM_DISPLAY_W, ROOM_DISPLAY_H = 390, 230
+ROOM_RECTS = [
+    pygame.Rect(30,  80,  ROOM_DISPLAY_W, ROOM_DISPLAY_H),
+    pygame.Rect(480, 80,  ROOM_DISPLAY_W, ROOM_DISPLAY_H),
+    pygame.Rect(30,  360, ROOM_DISPLAY_W, ROOM_DISPLAY_H),
+    pygame.Rect(480, 360, ROOM_DISPLAY_W, ROOM_DISPLAY_H),
+]
+
+def glyph_screen_rect(room_idx):
+    r = ROOM_RECTS[room_idx]
+    gx, gy = ROOMS[room_idx]["glyph_pos"]
+    sx = r.x + int(gx * ROOM_DISPLAY_W / ROOM_W)
+    sy = r.y + int(gy * ROOM_DISPLAY_H / ROOM_H)
+    sw = int(7 * 3 * ROOM_DISPLAY_W / ROOM_W)
+    sh = int(9 * 3 * ROOM_DISPLAY_H / ROOM_H)
+    return pygame.Rect(sx, sy, sw, sh)
+
+# ── helpers ───────────────────────────────────────────────────────────────────
+def draw_rounded_rect(surface, color, rect, radius=6, border=0, border_color=None):
+    pygame.draw.rect(surface, color, rect, border_radius=radius)
+    if border and border_color:
+        pygame.draw.rect(surface, border_color, rect, border, border_radius=radius)
+
+def draw_text_centered(surface, text, font, color, cx, cy):
+    s = font.render(text, True, color)
+    surface.blit(s, (cx - s.get_width()//2, cy - s.get_height()//2))
+
+# ── draw rooms grid ───────────────────────────────────────────────────────────
+def draw_rooms(hover_idx, flash_timers):
+    for i, room in enumerate(ROOMS):
+        r = ROOM_RECTS[i]
+        scaled = pygame.transform.scale(room["surface"], (ROOM_DISPLAY_W, ROOM_DISPLAY_H))
+        WIN.blit(scaled, r.topleft)
+
+        gx, gy = room["glyph_pos"]
+        sx = r.x + int(gx * ROOM_DISPLAY_W / ROOM_W)
+        sy = r.y + int(gy * ROOM_DISPLAY_H / ROOM_H)
+
+        if room["found"]:
+            draw_glyph(WIN, room["glyph_key"], sx, sy, cell=3, color=C_FOUND)
+        else:
+            draw_glyph(WIN, room["glyph_key"], sx, sy, cell=3, color=room["glyph_color"])
+
+        border_col = C_FOUND if room["found"] else (C_ACCENT if i==hover_idx else (55,44,30))
+        pygame.draw.rect(WIN, border_col, r, 2, border_radius=3)
+
+        lbl = FONT_SMALL.render(room["label"], True, C_FOUND if room["found"] else (120,100,70))
+        WIN.blit(lbl, (r.x+6, r.y+4))
+
+        if flash_timers.get(i,0) > 0:
+            flash_surf = pygame.Surface((ROOM_DISPLAY_W, ROOM_DISPLAY_H), pygame.SRCALPHA)
+            alpha = min(180, flash_timers[i]*6)
+            flash_surf.fill((255,220,80,alpha))
+            WIN.blit(flash_surf, r.topleft)
+
+        if room["found"]:
+            tag = FONT_SMALL.render("✓ symbol found", True, C_FOUND)
+            WIN.blit(tag, (r.right - tag.get_width() - 6, r.y+4))
+
+def draw_hud():
+    found = sum(1 for r in ROOMS if r["found"])
+    bar = pygame.Surface((WIDTH,52), pygame.SRCALPHA)
+    bar.fill((10,8,5,210))
+    WIN.blit(bar,(0,0))
+    title = FONT_TITLE.render("ROOM RECONSTRUCTION  ·  Find the hidden symbols", True, C_ACCENT)
+    WIN.blit(title,(20,13))
+    prog = FONT_BODY.render(f"{found} / {len(ROOMS)} found", True, C_TEXT)
+    WIN.blit(prog,(WIDTH-prog.get_width()-20,16))
+
+def draw_bottom_bar():
+    bar = pygame.Surface((WIDTH,52), pygame.SRCALPHA)
+    bar.fill((10,8,5,210))
+    WIN.blit(bar,(0,HEIGHT-52))
+    hint = FONT_SMALL.render(
+        "Click carefully — symbols are hidden in each scene.  Use your cipher book to decode them.",
+        True,(100,85,60))
+    WIN.blit(hint,(20,HEIGHT-36))
+
+# ── collection screen ─────────────────────────────────────────────────────────
+def draw_collection_screen(pulse):
+    WIN.fill((12,9,6))
+    title = FONT_TITLE.render("SYMBOLS COLLECTED", True, C_ACCENT)
+    WIN.blit(title,(WIDTH//2-title.get_width()//2,30))
+    sub = FONT_BODY.render(
+        "Use your cipher book to decode these marks and unscramble the location.",
+        True, C_TEXT)
+    WIN.blit(sub,(WIDTH//2-sub.get_width()//2,68))
+
+    for i, room in enumerate(ROOMS):
+        col = i%2; row = i//2
+        bx = 120 + col*340; by = 130 + row*210
+        panel = pygame.Rect(bx,by,260,180)
+        draw_rounded_rect(WIN,(25,20,14),panel,radius=8,border=2,border_color=C_PANEL_BORDER)
+        lbl = FONT_SMALL.render(room["label"], True,(120,100,70))
+        WIN.blit(lbl,(bx+10,by+8))
+        gx = bx+130-(7*7)//2; gy = by+50
+        draw_glyph(WIN,room["glyph_key"],gx,gy,cell=7,color=C_FOUND)
+        alpha = int(60+40*math.sin(pulse+i))
+        glow = pygame.Surface((7*7+20,9*7+20),pygame.SRCALPHA)
+        pygame.draw.rect(glow,(*C_ACCENT,alpha),glow.get_rect(),border_radius=6)
+        WIN.blit(glow,(gx-10,gy-10))
+        note = FONT_SMALL.render("Symbol #"+str(i+1), True,(90,75,55))
+        WIN.blit(note,(bx+10,by+160))
+
+    footer = FONT_SMALL.render(
+        "These 4 symbols represent letters in the unknown language  —  decode, then unscramble.",
+        True,(80,68,50))
+    WIN.blit(footer,(WIDTH//2-footer.get_width()//2,HEIGHT-30))
+
+# ── main ─────────────────────────────────────────────────────────────────────
+def main():
+    clock = pygame.time.Clock()
+    pulse = 0.0
+    flash_timers = {}
+    all_found = False
+    hover_idx = None
+
+    run = True
+    while run:
+        clock.tick(60)
+        pulse += 0.06
+        mx,my = pygame.mouse.get_pos()
+
+        for k in list(flash_timers):
+            flash_timers[k] -= 1
+            if flash_timers[k] <= 0:
+                del flash_timers[k]
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button==1:
+                if not all_found:
+                    for i,room in enumerate(ROOMS):
+                        if not room["found"]:
+                            hit = glyph_screen_rect(i).inflate(14,14)
+                            if hit.collidepoint(mx,my):
+                                room["found"] = True
+                                flash_timers[i] = 30
+                                if all(r["found"] for r in ROOMS):
+                                    all_found = True
+
+        hover_idx = None
+        if not all_found:
+            for i in range(len(ROOMS)):
+                if ROOM_RECTS[i].collidepoint(mx,my):
+                    hover_idx = i; break
+
+        pygame.mouse.set_cursor(
+            pygame.SYSTEM_CURSOR_CROSSHAIR if hover_idx is not None
+            else pygame.SYSTEM_CURSOR_ARROW)
+
+        WIN.fill(C_BG)
+        if all_found:
+            draw_collection_screen(pulse)
+        else:
+            draw_rooms(hover_idx, flash_timers)
+            draw_hud()
+            draw_bottom_bar()
+
+        pygame.display.update()
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
