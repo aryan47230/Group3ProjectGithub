@@ -89,7 +89,7 @@ def decode_with_key(text, key):
 
 BLOCKS       = split_into_blocks(CIPHER_TEXT, 5)
 ANSWERS      = [decode_with_key(b, CIPHER_KEY) for b in BLOCKS]
-FULL_DECODED = decode_with_key(CIPHER_TEXT, CIPHER_KEY)
+FULL_DECODED = FULL_DECODED = "I took Professor Grainger's class because I heard it was an easy A. He gave me a sixty five percent on my final, a sixty five percent!"
 
 # =============================================================
 #  STATE
@@ -360,14 +360,31 @@ def draw_win_animation(t):
                 last_char_time  = now
         typewriter_text = FULL_DECODED[:typewriter_idx]
 
-        tw_rect = pygame.Rect(10, H - 90, W - 20, 75)
+        tw_rect = pygame.Rect(10, H - 130, W - 20, 115)
         pygame.draw.rect(screen, KEY_BG, tw_rect, border_radius=6)
         pygame.draw.rect(screen, CORRECT, tw_rect, 2, border_radius=6)
         screen.blit(FONT_SM.render("DECODED TRANSMISSION:", True, TEXT_DIM),
                     (tw_rect.x + 12, tw_rect.y + 8))
+
         cursor  = "|" if int(now * 2) % 2 == 0 else ""
-        tw_surf = FONT_TYPEWR.render(typewriter_text + cursor, True, CORRECT)
-        screen.blit(tw_surf, (tw_rect.x + 12, tw_rect.y + 30))
+        display = typewriter_text + cursor
+
+        # wrap text across multiple lines
+        words   = display.split(" ")
+        lines   = []
+        current = ""
+        for word in words:
+            test = current + (" " if current else "") + word
+            if FONT_TYPEWR.size(test)[0] < tw_rect.width - 24:
+                current = test
+            else:
+                lines.append(current)
+                current = word
+        lines.append(current)
+
+        for li, line in enumerate(lines):
+            screen.blit(FONT_TYPEWR.render(line, True, CORRECT),
+                        (tw_rect.x + 12, tw_rect.y + 28 + li * 26))
 
         if typewriter_idx >= len(FULL_DECODED):
             hdr = FONT_TITLE.render("[ TRANSMISSION DECODED ]", True, CORRECT)
