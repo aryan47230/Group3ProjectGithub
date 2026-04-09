@@ -12,12 +12,34 @@ BLUE   = ( 50, 120, 220)
 GRAY   = (200, 200, 200)
 
 
+FRAME_W = 16
+FRAME_H = 17
+# Sheet layout: 4 cols (down, left, right, up) × 3 rows (anim frames)
+DIRECTION_COL = {"down": 0, "left": 3, "up": 2, "right": 1}
+ANIM_FRAMES   = 3   # rows in the sprite sheet
+ANIM_SPEED    = 8   # game ticks per frame
+
+
 class Player(pygame.sprite.Sprite):
     def __init__(self, x: int, y: int):
         super().__init__()
-        self.image = pygame.Surface((40, 50), pygame.SRCALPHA)
-        pygame.draw.rect(self.image, BLUE, (0, 0, 40, 50), border_radius=6)
-        self.rect = self.image.get_rect(center=(x, y))
+        sheet = pygame.image.load("/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/Sprites/Males/M_03.png").convert()
+        sheet.set_colorkey(sheet.get_at((0, 0)))
+        self.sheet = sheet
+
+        self.direction  = "down"
+        self.anim_index = 0        # standing frame
+        self.anim_timer = 0
+        self.moving     = False
+
+        self.image = self._get_frame()
+        self.rect  = self.image.get_rect(center=(x, y))
+
+    def _get_frame(self) -> pygame.Surface:
+        col   = DIRECTION_COL[self.direction]
+        row   = self.anim_index
+        frame = self.sheet.subsurface(pygame.Rect(col * FRAME_W, row * FRAME_H, FRAME_W, FRAME_H))
+        return pygame.transform.scale(frame, (48, 48))
 
     def handle_input(self) -> None:
         keys = pygame.key.get_pressed()
@@ -28,13 +50,35 @@ class Player(pygame.sprite.Sprite):
         if keys[pygame.K_UP]    or keys[pygame.K_w]: dy -= PLAYER_SPEED
         if keys[pygame.K_DOWN]  or keys[pygame.K_s]: dy += PLAYER_SPEED
 
+        self.moving = dx != 0 or dy != 0
+
+        # Update facing direction (prefer horizontal when diagonal)
+        if dx < 0:
+            self.direction = "left"
+        elif dx > 0:
+            self.direction = "right"
+        elif dy < 0:
+            self.direction = "up"
+        elif dy > 0:
+            self.direction = "down"
+
         self.rect.x += dx
         self.rect.y += dy
-
         self.rect.clamp_ip(pygame.display.get_surface().get_rect())
 
     def update(self) -> None:
         self.handle_input()
+
+        if self.moving:
+            self.anim_timer += 1
+            if self.anim_timer >= ANIM_SPEED:
+                self.anim_timer  = 0
+                self.anim_index  = (self.anim_index + 1) % ANIM_FRAMES
+        else:
+            self.anim_index = 0   # reset to standing frame
+            self.anim_timer = 0
+
+        self.image = self._get_frame()
 
 
 def draw_grid(surface: pygame.Surface, cell: int = 50) -> None:
