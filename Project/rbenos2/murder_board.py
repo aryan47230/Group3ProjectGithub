@@ -23,16 +23,16 @@ ALIBI_BLURBS = [
     "I was just trying to finish writing my book so I went to get some coffee and I saw a little vile with red liquid. The barista said it was fruit punch flavoring.",
 
     # John John (Student)
-    "I WASN'T VAPING I SWEAR, the smoke came from this random gun I found on the dumpster.",
+    "I WASN'T VAPING I SWEAR, the smoke came from this random gun I found on the dumpster. The CBTF proctor was trying to get me in trouble but I got a call from a number a didn't regonize saying to meet outside.",
 
     # Richard Hedricks (Janitor)
-    "I was just cleaning, doing my job ya know, and I hear this girl crying saying she saw Grainger Bob get murdered with something that looked like a mini sword.",
+    "I was cleaning late because I picked up the closing shift, doing my job ya know, and I hear this girl crying saying she saw Grainger Bob get murdered with something that looked like a mini sword. Sounded like she had been in there a while, she wouldn't come out of the stall.",
 
     # Ross Bob (Artist)
-    "I was ... admiring the bell okay! Don't make fun of me, I am an artist too. This knife was just sitting in the planter here next to this magnificant work of craftmenship.",
+    "I was ... measureing the magnetic field of the bell with an iOLab! Don't make fun of me, I am an artist. This knife was just sitting in the planter here next to this magnificant work of craftmenship.",
 
     # Claudia VanHelsing (Librarian)
-    "I was proctering an exam when I saw smoke coming in through the window so I left to yell at a kid for vaping, the same kid that brought candlestick holders in the testing room because he thought they were 'cool cups for fruit punch'.",
+    "I was proctering an exam in my big comfy hoodie when I saw smoke coming in through the window so I left to yell at a kid for vaping, the same kid that brought candlestick holders in the testing room because he thought they were 'cool cups for fruit punch'.",
 ]
 
 
@@ -65,6 +65,10 @@ TEXT_LABEL  = ( 60,  40,  20)
 SLOT_DASHED = (160, 120,  72)
 CORRECT_COL = ( 60, 160,  80)
 WRONG_COL   = (180,  50,  50)
+
+TIME_PILL   = ( 80,  60, 130)
+TIME_PILL_H = (110,  85, 170)
+TIME_TEXT   = (220, 210, 255)
 
 BTN_COL     = (120,  30,  30)
 BTN_HOVER   = (160,  45,  45)
@@ -106,9 +110,12 @@ CORRECT = {
     "suspect":  "Ross Bob",
     "location": "By the Bell",
     "weapon":   "Knife",
+    "time":     "8:23 PM",
 }
 
-SLOT_KINDS = ["location", "weapon"]
+SLOT_KINDS = ["time", "location", "weapon"]
+
+TIMES = ["7:45 PM", "8:23 PM", "9:47 PM", "3:55 AM", "12:31 AM"]
 
 WIN_IDX = next(i for i, s in enumerate(SUSPECTS)
                if s["name"] == CORRECT["suspect"])
@@ -151,22 +158,29 @@ CARDS_START_X = (W - (5 * CARD_W + 4 * CARD_GAP)) // 2
 PHOTO_PAD     = 5
 SLOT_PADDING  = 6
 SLOT_MARGIN   = 8
-SLOT_H        = 214   # fixed — tall enough for the largest image (smoking area 190px tall)
-CLUE_ZONE_Y   = 570
+SLOT_H        = 134
+TIME_SLOT_H   = 30
+CLUE_ZONE_Y = 570
 
-def card_x(i):
+def card_x(i):                                          
     return CARDS_START_X + i * (CARD_W + CARD_GAP)
 
+def slot_height(slot_i):
+    return TIME_SLOT_H if SLOT_KINDS[slot_i] == "time" else SLOT_H
+
 def card_total_height(i):
-    return CARD_HEADER_H + len(SLOT_KINDS) * (SLOT_H + SLOT_PADDING) + SLOT_PADDING + 26
+    return CARD_HEADER_H + sum(slot_height(si) + SLOT_PADDING for si in range(len(SLOT_KINDS))) + SLOT_PADDING + 8
 
 def slot_top_y(card_i, slot_i):
-    return CARDS_Y + CARD_HEADER_H + SLOT_PADDING + slot_i * (SLOT_H + SLOT_PADDING)
+    y = CARDS_Y + CARD_HEADER_H + SLOT_PADDING
+    for si in range(slot_i):
+        y += slot_height(si) + SLOT_PADDING
+    return y
 
 def slot_rect(card_i, slot_i):
     return pygame.Rect(card_x(card_i) + SLOT_MARGIN,
                        slot_top_y(card_i, slot_i),
-                       CARD_W - SLOT_MARGIN * 2, SLOT_H)
+                       CARD_W - SLOT_MARGIN * 2, slot_height(slot_i))
 
 def card_rect(i):
     return pygame.Rect(card_x(i), CARDS_Y, CARD_W, card_total_height(i))
@@ -219,6 +233,17 @@ def make_clues():
             "placed": False, "slot":   None,
             "rect":   None,  "home":   None,
         })
+
+    for t in TIMES:
+        clues.append({
+            "label":  t,    "kind":   "time",
+            "surf":   None,
+            "w":      90,   "h":      28,
+            "pw":     90,   "ph":     28,
+            "angle":  0,
+            "placed": False, "slot":   None,
+            "rect":   None,  "home":   None,
+        })
     return clues
 
 ALL_CLUES = make_clues()
@@ -239,6 +264,14 @@ def assign_clue_positions():
         c["home"] = pygame.Rect(x, y, c["w"], c["h"])
         c["rect"] = pygame.Rect(x, y, c["w"], c["h"])
         x += c["w"] + rng.randint(6, 18)
+
+    tim_c = [c for c in ALL_CLUES if c["kind"] == "time"]
+    x = W // 2 - (len(tim_c) * 96) // 2
+    for c in tim_c:
+        y = CLUE_ZONE_Y - 38
+        c["home"] = pygame.Rect(x, y, c["w"], c["h"])
+        c["rect"] = pygame.Rect(x, y, c["w"], c["h"])
+        x += c["w"] + 6
 
 assign_clue_positions()
 
@@ -533,14 +566,19 @@ def draw_suspect_card(i, mouse_pos):
         clue = slots[i][kind]
         pygame.draw.rect(screen, (155, 130, 95), sr, border_radius=3)
         if clue:
-            scale = min((sr.w - 8) / clue["pw"], (sr.h - 8) / clue["ph"])
-            dw    = int(clue["pw"] * scale)
-            dh    = int(clue["ph"] * scale)
-            scaled= pygame.transform.scale(clue["surf"], (dw, dh))
-            bx    = sr.x + (sr.w - dw) // 2
-            by    = sr.y + (sr.h - dh) // 2
-            screen.blit(scaled, (bx, by))
-            pygame.draw.rect(screen, CARD_BORDER, sr, 1, border_radius=3)
+            if clue["kind"] == "time":
+                pygame.draw.rect(screen, TIME_PILL, sr, border_radius=5)
+                lbl = FONT_SM.render(clue["label"], True, TIME_TEXT)
+                screen.blit(lbl, lbl.get_rect(center=sr.center))
+            else:
+                scale = min((sr.w - 8) / clue["pw"], (sr.h - 8) / clue["ph"])
+                dw    = int(clue["pw"] * scale)
+                dh    = int(clue["ph"] * scale)
+                scaled= pygame.transform.scale(clue["surf"], (dw, dh))
+                bx    = sr.x + (sr.w - dw) // 2
+                by    = sr.y + (sr.h - dh) // 2
+                screen.blit(scaled, (bx, by))
+                pygame.draw.rect(screen, CARD_BORDER, sr, 1, border_radius=3)
         else:
             for dx in range(sr.x+4, sr.right-4, 8):
                 pygame.draw.line(screen, SLOT_DASHED, (dx, sr.y+2),    (dx+4, sr.y+2),    1)
@@ -548,7 +586,19 @@ def draw_suspect_card(i, mouse_pos):
             lbl = FONT_XS.render(kind.upper(), True, TEXT_DIM)
             screen.blit(lbl, lbl.get_rect(center=sr.center))
 
+def draw_time_pill(c, hovered=False, alpha=255):
+    col  = TIME_PILL_H if hovered else TIME_PILL
+    surf = pygame.Surface((c["w"], c["h"]), pygame.SRCALPHA)
+    pygame.draw.rect(surf, (*col, alpha), (0, 0, c["w"], c["h"]), border_radius=6)
+    pygame.draw.rect(surf, (255, 255, 255, 60), (0, 0, c["w"], c["h"]), 1, border_radius=6)
+    lbl = FONT_SM.render(c["label"], True, TIME_TEXT)
+    surf.blit(lbl, lbl.get_rect(center=(c["w"]//2, c["h"]//2)))
+    screen.blit(surf, (c["rect"].x, c["rect"].y))
+
 def draw_clue_photo(c, hovered=False, alpha=255, use_angle=True):
+    if c["kind"] == "time":
+        draw_time_pill(c, hovered=hovered, alpha=alpha)
+        return
     surf  = c["surf"].copy()
     if alpha < 255:
         surf.set_alpha(alpha)
@@ -569,6 +619,7 @@ def draw_clue_zone_divider():
     screen.blit(tape, (0, CLUE_ZONE_Y-8))
     screen.blit(FONT_HAND.render("LOCATIONS ▼",True,(80,55,25)),(25,CLUE_ZONE_Y-22))
     screen.blit(FONT_HAND.render("WEAPONS ▼",  True,(80,55,25)),(W//2+10,CLUE_ZONE_Y-22))
+    screen.blit(FONT_HAND.render("TIMES ▼",    True,(80,55,25)),(W//2-30, CLUE_ZONE_Y-58))
 
 def draw_title_card():
     tr = pygame.Rect(W//2-230,8,460,36)
@@ -580,7 +631,71 @@ def draw_title_card():
                 .get_rect(center=tr.center))
     draw_pin(tr.centerx-90, tr.y-2)
     draw_pin(tr.centerx+90, tr.y-2)
+def draw_evidence_button(mouse_pos):
+    br  = pygame.Rect(W - 160, 8, 150, 36)
+    col = (80, 55, 110) if br.collidepoint(mouse_pos) else (55, 35, 85)
+    pygame.draw.rect(screen, CARD_BG, br, border_radius=5)
+    pygame.draw.rect(screen, col,     br, border_radius=5)
+    pygame.draw.rect(screen, (180, 140, 220), br, 2, border_radius=5)
+    s = FONT_SM.render("📁 EVIDENCE", True, (220, 200, 255))
+    screen.blit(s, s.get_rect(center=br.center))
+    return br
 
+def draw_evidence_panel():
+    if not evidence_open:
+        return
+
+    # ── Panel background ──
+    pw, ph = 780, 380
+    px     = W // 2 - pw // 2
+    py     = H // 2 - ph // 2
+    pygame.draw.rect(screen, (143, 105, 60), (px+4, py+4, pw, ph), border_radius=8)
+    pygame.draw.rect(screen, (176, 141, 100),      (px, py, pw, ph),      border_radius=8)
+    pygame.draw.rect(screen, (61, 39, 13), (px, py, pw, ph),   2, border_radius=8)
+    draw_tape(pygame.Rect(px, py, pw, 14))
+
+    # Title
+    t = FONT_MED.render("EVIDENCE FROM THE SCENE", True, (140, 30, 30))
+    screen.blit(t, t.get_rect(centerx=px + pw // 2, y=py + 14))
+
+    # ── Five photo slots ──────────────────────────────────────
+    # Replace None with pygame.image.load("your_photo.png") for each slot
+    EVIDENCE_PHOTOS = [
+        pygame.image.load("coffee_cup.png"),   # <-- slot 1: replace with pygame.image.load("evidence1.png")
+        pygame.image.load("iOLab_reciept.png"),   # <-- slot 2: replace with pygame.image.load("evidence2.png")
+        pygame.image.load("security_cam.png"),   # <-- slot 3: replace with pygame.image.load("evidence3.png")
+        pygame.image.load("broken_watch.png"),   # <-- slot 4: replace with pygame.image.load("evidence4.png")
+        pygame.image.load("call_log.png"),   # <-- slot 5: replace with pygame.image.load("evidence5.png")
+    ]
+
+    slot_w, slot_h = 140, 140
+    sy      = py + 60
+    # Staggered y positions — alternates high/low
+    stagger = [sy, sy + 60, sy, sy + 60, sy]
+
+    for idx, photo in enumerate(EVIDENCE_PHOTOS):
+        total_w = 5 * slot_w + 4 * 16
+        sx      = px + (pw - total_w) // 2
+        x       = sx + idx * (slot_w + 16)
+        y       = stagger[idx]
+        sr      = pygame.Rect(x, y, slot_w, slot_h)
+
+        # polaroid-style white border
+        pygame.draw.rect(screen, PHOTO_BG,    sr, border_radius=4)
+        pygame.draw.rect(screen, CARD_BORDER, sr, 1, border_radius=4)
+        if photo:
+            scaled = pygame.transform.scale(photo, (slot_w - 8, slot_h - 24))
+            screen.blit(scaled, (sr.x + 4, sr.y + 4))
+        else:
+            lbl = FONT_XS.render(f"PHOTO {idx+1}", True, TEXT_DIM)
+            screen.blit(lbl, lbl.get_rect(center=(sr.centerx, sr.centery - 8)))
+
+    # ── Close button ──
+    close_r = pygame.Rect(px + pw - 26, py + 6, 20, 16)
+    pygame.draw.rect(screen, CARD_BORDER, close_r, border_radius=3)
+    screen.blit(FONT_XS.render("x", True, TEXT_CARD),
+                FONT_XS.render("x", True, TEXT_CARD).get_rect(center=close_r.center))
+    return close_r
 def draw_arrest_button(mouse_pos):
     """Big arrest button at bottom center — only shown in select_suspect phase."""
     if phase != "select_suspect":
@@ -627,7 +742,9 @@ def check_suspect(i):
               slots[i]["location"]["label"].lower() == CORRECT["location"].lower())
     wpn_ok = (slots[i]["weapon"] and
               slots[i]["weapon"]["label"].lower()   == CORRECT["weapon"].lower())
-    return "correct" if (s["name"]==CORRECT["suspect"] and loc_ok and wpn_ok) else "wrong"
+    tim_ok = (slots[i]["time"] and
+              slots[i]["time"]["label"].lower()     == CORRECT["time"].lower())
+    return "correct" if (s["name"]==CORRECT["suspect"] and loc_ok and wpn_ok and tim_ok) else "wrong"
 
 # =============================================================
 #  GAME STATE
@@ -639,6 +756,7 @@ selected_suspect = None
 wrong_timer    = 0.0
 arrest_start   = 0.0
 win_start      = 0.0
+evidence_open    = False
 
 # =============================================================
 #  WIN SCREEN
@@ -695,6 +813,18 @@ while running:
             close_r = get_alibi_close_rect()
             if close_r and close_r.collidepoint(mouse):
                 close_alibi()
+                continue
+            # --- evidence panel close ---
+            if evidence_open:
+                cr = draw_evidence_panel()
+                if cr and cr.collidepoint(mouse):
+                    evidence_open = False
+                continue
+
+            # --- evidence button ---
+            ev_btn = pygame.Rect(W - 160, 8, 150, 36)
+            if ev_btn.collidepoint(mouse):
+                evidence_open = not evidence_open
                 continue
 
             # --- alibi buttons ---
@@ -845,6 +975,8 @@ while running:
         if dragging:
             draw_clue_photo(dragging, hovered=True, use_angle=False)
 
+        draw_evidence_button(mouse)
+        draw_evidence_panel()
         # alibi popup always on top
         draw_alibi_popup()
 
