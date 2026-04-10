@@ -27,9 +27,8 @@ FONT_UI     = pygame.font.SysFont("Courier", 20, bold=True)
 FONT_WIN    = pygame.font.SysFont("Courier", 30, bold=True)
 FONT_NUM = pygame.font.SysFont("Courier", 18, bold=True)
 
-screen = pygame.display.set_mode((WINDOW_W, WINDOW_H))
-pygame.display.set_caption("Crime Scene Puzzle")
-clock = pygame.time.Clock()
+screen = None
+clock  = None
 
 
 # ---------------------------------------------------------
@@ -145,19 +144,31 @@ def draw_ui(won):
 
 
 # ---------------------------------------------------------
-#   MAIN
+#   RUN  (called from main.py or standalone)
 # ---------------------------------------------------------
 
-def main():
-    tile_imgs = generate_tile_images()
+def run(ext_screen=None, ext_clock=None):
+    """Run the puzzle. Returns 'menu' or 'quit'."""
+    global screen, clock
 
+    from pause import PauseScreen
+
+    # Set up display for this puzzle
+    screen = pygame.display.set_mode((WINDOW_W, WINDOW_H))
+    pygame.display.set_caption("Crime Scene Puzzle")
+    clock = ext_clock if ext_clock else pygame.time.Clock()
+
+    tile_imgs = generate_tile_images()
     board = solved_board()
     shuffle(board)
-    won   = False
+    won    = False
+    paused = False
+    pause_screen = PauseScreen(WINDOW_W, WINDOW_H)
 
+    result  = "quit"
     running = True
     while running:
-        screen.fill(BG)
+        dt    = clock.tick(60)
         mouse = pygame.mouse.get_pos()
 
         hover = None
@@ -170,6 +181,20 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
 
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                paused = not paused
+                if not paused:
+                    pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_ARROW)
+
+            elif paused:
+                action = pause_screen.handle_event(event)
+                if action == "resume":
+                    paused = False
+                    pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_ARROW)
+                elif action == "quit":
+                    result  = "menu"
+                    running = False
+
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if not won and hover:
                     r, c = hover
@@ -177,12 +202,22 @@ def main():
                         if is_solved(board):
                             won = True
 
-        draw_board(board, tile_imgs, hover, won)
+        screen.fill(BG)
+        draw_board(board, tile_imgs, hover if not paused else None, won)
         draw_ui(won)
 
-        pygame.display.flip()
-        clock.tick(60)
+        if paused:
+            pause_screen.update(dt)
+            pause_screen.draw(screen)
 
+        pygame.display.flip()
+
+    return result
+
+
+def main():
+    pygame.init()
+    run()
     pygame.quit()
 
 

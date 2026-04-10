@@ -64,9 +64,12 @@ class Menu:
             True, C_DIM
         )
         self._surf_hint = self.font_hint.render(
-            "W / S  or  \u2191 \u2193  to navigate     ENTER to confirm",
+            "W / S  or  \u2191 \u2193  to navigate     ENTER / Click to confirm",
             True, C_DIM
         )
+
+        # Mouse state
+        self._option_rects = []  # filled each draw()
         self._surf_version = self.font_hint.render("v0.1.0", True, C_DIM)
 
     # ------------------------------------------------------------------
@@ -89,6 +92,22 @@ class Menu:
     # ------------------------------------------------------------------
 
     def handle_event(self, event):
+        if event.type == pygame.MOUSEMOTION:
+            for i, rect in enumerate(self._option_rects):
+                if rect and rect.collidepoint(event.pos):
+                    if self.selected != i:
+                        self.selected       = i
+                        self._blink_visible = True
+                        self._blink_timer   = 0
+            return None
+
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for i, rect in enumerate(self._option_rects):
+                if rect and rect.collidepoint(event.pos):
+                    self.selected = i
+                    return self._confirm()
+            return None
+
         if event.type != pygame.KEYDOWN:
             return None
 
@@ -147,6 +166,10 @@ class Menu:
         option_start_y = self.H // 2 - 10
         option_gap     = 52
 
+        mouse_pos = pygame.mouse.get_pos()
+        self._option_rects = []
+        hovering_any = False
+
         for i, label in enumerate(OPTIONS):
             is_sel = i == self.selected
             colour = C_SELECTED if is_sel else C_UNSELECTED
@@ -154,8 +177,13 @@ class Menu:
             text_x = cx - text.get_width() // 2
             text_y = option_start_y + i * option_gap
 
+            bar_rect = pygame.Rect(cx - 160, text_y - 6, 320, text.get_height() + 12)
+            self._option_rects.append(bar_rect)
+
+            if bar_rect.collidepoint(mouse_pos):
+                hovering_any = True
+
             if is_sel:
-                bar_rect = pygame.Rect(cx - 160, text_y - 6, 320, text.get_height() + 12)
                 pygame.draw.rect(screen, (32, 30, 20), bar_rect, border_radius=4)
                 pygame.draw.rect(screen, C_BORDER, bar_rect, width=1, border_radius=4)
 
@@ -164,6 +192,8 @@ class Menu:
             if is_sel and self._blink_visible:
                 arrow = self.font_option.render(">", True, C_HIGHLIGHT)
                 screen.blit(arrow, (text_x - arrow.get_width() - 12, text_y))
+
+        pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_HAND if hovering_any else pygame.SYSTEM_CURSOR_ARROW)
 
         screen.blit(self._surf_hint,
                     (cx - self._surf_hint.get_width() // 2, self.H - 50))

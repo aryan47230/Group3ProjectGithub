@@ -25,10 +25,9 @@ CIPHER_KEY = {
 #  WINDOW & STYLE
 # =============================================================
 
-W, H = 900, 700
-screen = pygame.display.set_mode((W, H))
-pygame.display.set_caption("Voice Descrambler")
-clock = pygame.time.Clock()
+W, H   = 900, 700
+screen = None
+clock  = None
 
 BG          = (13, 13, 20)
 PANEL       = (22, 22, 35)
@@ -435,68 +434,127 @@ def click_cell(mouse_pos):
     active_cell = None
 
 # =============================================================
-#  MAIN LOOP
+#  RUN  (called from main.py or standalone)
 # =============================================================
 
-running = True
-start_t = time.time()
+def run(ext_screen=None, ext_clock=None):
+    """Run the puzzle. Returns 'menu' or 'quit'."""
+    global screen, clock
+    global player_inputs, active_cell, check_results, player_key
+    global won, win_phase, block_positions, block_targets
+    global typewriter_idx, typewriter_text, last_char_time
 
-while running:
-    screen.fill(BG)
-    t     = time.time() - start_t
-    mouse = pygame.mouse.get_pos()
+    from pause import PauseScreen
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
+    # Set up display
+    screen = pygame.display.set_mode((W, H))
+    pygame.display.set_caption("Voice Descrambler")
+    clock = ext_clock if ext_clock else pygame.time.Clock()
 
-        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and not won:
-            for i in range(5):
-                if check_btn_rect(i).collidepoint(mouse):
-                    check_block(i)
-            click_cell(mouse)
+    # Reset all game state
+    player_inputs  = [[""] * len(b) for b in BLOCKS]
+    active_cell    = None
+    check_results  = [None] * 5
+    player_key     = {}
+    won            = False
+    win_phase      = 0
+    block_positions= []
+    block_targets  = []
+    typewriter_idx = 0
+    typewriter_text= ""
+    last_char_time = 0.0
 
-        elif event.type == pygame.KEYDOWN and active_cell and not won:
-            bi, ci = active_cell
+    paused       = False
+    pause_screen = PauseScreen(W, H)
+    result       = "quit"
+    running      = True
+    start_t      = time.time()
 
-            if event.key == pygame.K_BACKSPACE:
-                player_inputs[bi][ci] = ""
-                check_results[bi]     = None
-                rebuild_player_key()
-                prev = next_input_cell(bi, ci, -1)
-                if prev:
-                    active_cell = prev
+    while running:
+        clock.tick(60)
+        t     = time.time() - start_t
+        mouse = pygame.mouse.get_pos()
 
-            elif event.key in (pygame.K_LEFT, pygame.K_UP):
-                prev = next_input_cell(bi, ci, -1)
-                if prev:
-                    active_cell = prev
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
 
-            elif event.key in (pygame.K_RIGHT, pygame.K_DOWN, pygame.K_RETURN):
-                nxt = next_input_cell(bi, ci, 1)
-                if nxt:
-                    active_cell = nxt
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                paused = not paused
+                if not paused:
+                    pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_ARROW)
 
-            elif event.unicode.upper() in string.ascii_uppercase:
-                player_inputs[bi][ci] = event.unicode.upper()
-                check_results[bi]     = None
-                rebuild_player_key()
-                nxt = next_input_cell(bi, ci, 1)
-                if nxt:
-                    active_cell = nxt
+            elif paused:
+                action = pause_screen.handle_event(event)
+                if action == "resume":
+                    paused = False
+                    pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_ARROW)
+                elif action == "quit":
+                    result  = "menu"
+                    running = False
 
-    if not won:
-        draw_title()
-        draw_blocks(mouse, t)
-        draw_key_panel()
-        draw_hint()
-        if all_solved():
-            won = True
-            start_win_animation()
-    else:
-        draw_win_animation(t)
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and not won:
+                for i in range(5):
+                    if check_btn_rect(i).collidepoint(mouse):
+                        check_block(i)
+                click_cell(mouse)
 
-    pygame.display.flip()
-    clock.tick(60)
+            elif event.type == pygame.KEYDOWN and active_cell and not won:
+                bi, ci = active_cell
 
-pygame.quit()
+                if event.key == pygame.K_BACKSPACE:
+                    player_inputs[bi][ci] = ""
+                    check_results[bi]     = None
+                    rebuild_player_key()
+                    prev = next_input_cell(bi, ci, -1)
+                    if prev:
+                        active_cell = prev
+
+                elif event.key in (pygame.K_LEFT, pygame.K_UP):
+                    prev = next_input_cell(bi, ci, -1)
+                    if prev:
+                        active_cell = prev
+
+                elif event.key in (pygame.K_RIGHT, pygame.K_DOWN, pygame.K_RETURN):
+                    nxt = next_input_cell(bi, ci, 1)
+                    if nxt:
+                        active_cell = nxt
+
+                elif event.unicode.upper() in string.ascii_uppercase:
+                    player_inputs[bi][ci] = event.unicode.upper()
+                    check_results[bi]     = None
+                    rebuild_player_key()
+                    nxt = next_input_cell(bi, ci, 1)
+                    if nxt:
+                        active_cell = nxt
+
+        screen.fill(BG)
+
+        if not won:
+            draw_title()
+            draw_blocks(mouse, t)
+            draw_key_panel()
+            draw_hint()
+            if all_solved():
+                won = True
+                start_win_animation()
+        else:
+            draw_win_animation(t)
+
+        if paused:
+            pause_screen.update(clock.get_time())
+            pause_screen.draw(screen)
+
+        pygame.display.flip()
+
+    return result
+
+
+def main():
+    pygame.init()
+    run()
+    pygame.quit()
+
+
+if __name__ == "__main__":
+    main()
