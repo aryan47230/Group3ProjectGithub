@@ -1,522 +1,514 @@
 import pygame
 import math
+import os
 
 pygame.init()
 
-WIDTH, HEIGHT = 900, 650
+WIDTH, HEIGHT = 1280, 780
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Grainger Bob – Timeline Puzzle")
+pygame.display.set_caption("Grainger Bob – Bell Tower 2nd Floor")
 
-# ── palette ───────────────────────────────────────────────────────────────────
-C_BG          = (18, 14, 10)
-C_FLOOR       = (38, 30, 22)
-C_WALL        = (30, 24, 16)
-C_TEXT        = (220, 200, 160)
-C_ACCENT      = (180, 120, 40)
-C_DIM         = (100, 85, 60)
-C_PANEL       = (28, 22, 14)
-C_BORDER      = (80, 62, 36)
-C_BORDER_HI   = (200, 160, 70)
-C_SLOT_EMPTY  = (24, 19, 12)
-C_SLOT_BORDER = (60, 48, 28)
-C_CORRECT     = (60, 160, 80)
-C_WRONG       = (180, 50, 40)
-C_BELL_IDLE   = (190, 155, 50)
-C_BELL_RING   = (255, 220, 80)
-C_ELEVATOR    = (50, 45, 38)
-C_ELEV_OPEN   = (90, 75, 55)
+C_BG           = (18, 14, 10)
+C_TEXT         = (220, 200, 160)
+C_ACCENT       = (180, 120, 40)
+C_PANEL_BORDER = (120, 90, 40)
+C_FOUND        = (255, 220, 80)
 
-FONT_TITLE  = pygame.font.SysFont("Georgia", 26, bold=True)
-FONT_BODY   = pygame.font.SysFont("Georgia", 16)
-FONT_SMALL  = pygame.font.SysFont("Georgia", 13)
-FONT_TINY   = pygame.font.SysFont("Georgia", 11)
-FONT_MONO   = pygame.font.SysFont("Courier New", 14, bold=True)
-FONT_TIME   = pygame.font.SysFont("Courier New", 20, bold=True)
-FONT_BIG    = pygame.font.SysFont("Georgia", 32, bold=True)
+FONT_TITLE = pygame.font.SysFont("Georgia", 24, bold=True)
+FONT_BODY  = pygame.font.SysFont("Georgia", 16)
+FONT_SMALL = pygame.font.SysFont("Georgia", 12)
 
-# ── evidence items ─────────────────────────────────────────────────────────────
-# correct order index: 0=first, 1=second, 2=third, 3=fourth
-# swap times/labels to whatever the real times will be
+script_dir = os.path.dirname(os.path.abspath(__file__))
 
-ITEMS = [
-    {
-        "id": 0,
-        "name": "Security Camera Still",
-        "time": "8:47 AM",
-        "detail": "Bob seen entering\nthe building alone.",
-        "correct_pos": 0,   # ← change these to set correct order
-        "color": (50, 65, 90),
-        "icon": "camera",
-    },
-    {
-        "id": 1,
-        "name": "Phone Call Log",
-        "time": "10:12 AM",
-        "detail": "Outgoing call made\nfrom Bob's office.",
-        "correct_pos": 1,
-        "color": (60, 85, 60),
-        "icon": "phone",
-    },
-    {
-        "id": 2,
-        "name": "iOLab Receipt",
-        "time": "11:30 AM",
-        "detail": "Equipment checked out\nby unknown student.",
-        "correct_pos": 2,
-        "color": (85, 70, 45),
-        "icon": "receipt",
-    },
-    {
-        "id": 3,
-        "name": "Broken Watch",
-        "time": "1:58 PM",
-        "detail": "Stopped at time of\nthe incident.",
-        "correct_pos": 3,
-        "color": (75, 55, 55),
-        "icon": "watch",
-    },
+# ── Clue config ───────────────────────────────────────────────────────────────
+CLUE_FILES  = [
+    "Phone call log.png",
+    "iOLab checkout receipt.png",
+    "Security camera still.png",
+    "Broken watch stopped at a time.png",
+    "coffeecup.webp",
+]
+CLUE_LABELS = ["Phone Log", "iOLab Receipt", "Security Camera", "Broken Watch", "Coffee Cup"]
+CLUE_TIMES  = ["7:45 PM", "8:23 PM", "9:47 PM", "3:55 AM", "12:31 AM"]
+CORRECT_ORDER = [0, 1, 2, 4, 3]
+
+CLUE_IMGS = []
+for _f in CLUE_FILES:
+    _p = os.path.join(script_dir, _f)
+    try:
+        CLUE_IMGS.append(pygame.image.load(_p).convert_alpha())
+    except Exception as _e:
+        print(f"Could not load {_p}: {_e}")
+        _s = pygame.Surface((400, 280))
+        _s.fill((60, 50, 40))
+        CLUE_IMGS.append(_s)
+
+# ── Fit-scale helper ──────────────────────────────────────────────────────────
+def scale_fit(surf, target_w, target_h):
+    sw, sh = surf.get_size()
+    scale  = min(target_w / sw, target_h / sh)
+    nw, nh = int(sw * scale), int(sh * scale)
+    scaled = pygame.transform.smoothscale(surf, (nw, nh))
+    out = pygame.Surface((target_w, target_h), pygame.SRCALPHA)
+    out.fill((0, 0, 0, 0))
+    out.blit(scaled, ((target_w - nw) // 2, (target_h - nh) // 2))
+    return out
+
+# ── Layout ────────────────────────────────────────────────────────────────────
+CARD_W, CARD_H = 240, 168   # slightly bigger cards
+
+# Slots — moved up from the very bottom
+SLOT_W   = 148
+SLOT_H   = 100
+SLOT_PAD = 10
+SLOT_Y   = HEIGHT - SLOT_H - 40   # <-- moved up 40px from edge
+
+SLOTS_TOTAL = 5 * SLOT_W + 4 * SLOT_PAD
+SLOTS_X     = (WIDTH - SLOTS_TOTAL) // 2
+SLOT_RECTS  = [
+    pygame.Rect(SLOTS_X + i * (SLOT_W + SLOT_PAD), SLOT_Y, SLOT_W, SLOT_H)
+    for i in range(5)
 ]
 
-# ── pixel art icon drawers ────────────────────────────────────────────────────
-def draw_icon_camera(surface, cx, cy, size=28, color=(160,190,220)):
-    s = size
-    # body
-    pygame.draw.rect(surface, color,        (cx-s//2,   cy-s//3,   s,     s*2//3), border_radius=3)
-    pygame.draw.rect(surface, (color[0]//2, color[1]//2, color[2]//2), (cx-s//2, cy-s//3, s, s*2//3), 1, border_radius=3)
-    # lens
-    pygame.draw.circle(surface, (30,30,40), (cx, cy), s//4+1)
-    pygame.draw.circle(surface, (50,80,120),(cx, cy), s//4-1)
-    pygame.draw.circle(surface, (100,150,200),(cx-2,cy-2), 3)
-    # viewfinder bump
-    pygame.draw.rect(surface, color, (cx-4, cy-s//3-6, 8, 6), border_radius=2)
+BELL_BTN = pygame.Rect(WIDTH // 2 - 105, SLOT_Y - 42, 210, 34)
 
-def draw_icon_phone(surface, cx, cy, size=28, color=(140,200,140)):
-    s = size
-    pygame.draw.rect(surface, color, (cx-s//3, cy-s//2, s*2//3, s), border_radius=5)
-    pygame.draw.rect(surface, (color[0]//2, color[1]//2, color[2]//2), (cx-s//3, cy-s//2, s*2//3, s), 1, border_radius=5)
-    pygame.draw.rect(surface, (20,30,20), (cx-s//3+3, cy-s//2+6, s*2//3-6, s-16))
-    pygame.draw.circle(surface, color, (cx, cy+s//2-5), 4)
+# Card home positions in the upper area
+CARD_TOP = 62
+CARD_BOT = BELL_BTN.top - 8
 
-def draw_icon_receipt(surface, cx, cy, size=28, color=(200,185,140)):
-    s = size
-    # paper
-    pygame.draw.rect(surface, color, (cx-s//3, cy-s//2, s*2//3, s))
-    # lines of text
-    for i in range(4):
-        y = cy - s//2 + 6 + i*7
-        w = [s//2-4, s//3, s//2-6, s//4][i]
-        pygame.draw.rect(surface, (120,110,80), (cx-w//2, y, w, 3))
-    # zigzag bottom
-    pts = []
-    bx = cx - s//3; by = cy + s//2
-    step = 4
-    for j in range((s*2//3)//step + 1):
-        pts.append((bx + j*step, by - (4 if j%2==0 else 0)))
-    if len(pts) > 1:
-        pygame.draw.lines(surface, color, False, pts, 2)
+_h = CARD_BOT - CARD_TOP
+_row1_y = CARD_TOP + (_h // 4) - CARD_H // 2
+_row2_y = CARD_TOP + (3 * _h // 4) - CARD_H // 2
+_row1_y = max(CARD_TOP, _row1_y)
+_row2_y = min(CARD_BOT - CARD_H, _row2_y)
 
-def draw_icon_watch(surface, cx, cy, size=28, color=(200,170,120)):
-    s = size
-    # band top/bottom
-    pygame.draw.rect(surface, (80,60,40), (cx-4, cy-s//2-6, 8, 8), border_radius=2)
-    pygame.draw.rect(surface, (80,60,40), (cx-4, cy+s//2-2, 8, 8), border_radius=2)
-    # face
-    pygame.draw.circle(surface, (30,25,20), (cx,cy), s//2+1)
-    pygame.draw.circle(surface, color,      (cx,cy), s//2)
-    pygame.draw.circle(surface, (20,16,10), (cx,cy), s//2-3)
-    # hands — stopped at ~1:58 → hour near 2, minute near 58
-    # minute hand (nearly 12 — 58 min ≈ 348 deg)
-    angle_m = math.radians(348 - 90)
-    pygame.draw.line(surface, (220,200,150),
-        (cx,cy), (cx+int(math.cos(angle_m)*(s//2-4)), cy+int(math.sin(angle_m)*(s//2-4))), 1)
-    # hour hand (~2:00 = 60 deg)
-    angle_h = math.radians(60 - 90)
-    pygame.draw.line(surface, (220,200,150),
-        (cx,cy), (cx+int(math.cos(angle_h)*(s//2-8)), cy+int(math.sin(angle_h)*(s//2-8))), 2)
-    # crack across face
-    pygame.draw.line(surface, (80,60,40), (cx-4, cy-6), (cx+6, cy+4), 1)
+_gap3 = (WIDTH - 3 * CARD_W) // 4
+_gap2 = (WIDTH - 2 * CARD_W) // 3
 
-ICON_DRAWERS = {
-    "camera":  draw_icon_camera,
-    "phone":   draw_icon_phone,
-    "receipt": draw_icon_receipt,
-    "watch":   draw_icon_watch,
-}
+HOME_POS = [
+    (_gap3,                   _row1_y),
+    (_gap3 * 2 + CARD_W,      _row1_y),
+    (_gap3 * 3 + CARD_W * 2,  _row1_y),
+    (_gap2,                   _row2_y),
+    (_gap2 * 2 + CARD_W,      _row2_y),
+]
 
-# ── pixel art bell ─────────────────────────────────────────────────────────────
-def draw_bell(surface, cx, cy, scale=1.0, color=C_BELL_IDLE, shake=0):
-    ox = int(math.sin(shake * 0.8) * 6 * scale) if shake > 0 else 0
-    cx += ox
-    s = int(38 * scale)
-    # mounting bracket
-    pygame.draw.rect(surface, (80,70,55), (cx-6, cy-s-10, 12, 10), border_radius=2)
-    # bell body (trapezoid)
-    pts = [
-        (cx - s//2,    cy),
-        (cx + s//2,    cy),
-        (cx + s*3//4,  cy + s*2//3),
-        (cx - s*3//4,  cy + s*2//3),
-    ]
-    pygame.draw.polygon(surface, color, pts)
-    pygame.draw.polygon(surface, (127, 100, 40), pts, 2)
-    # bell rim
-    pygame.draw.ellipse(surface, (max(0,color[0]-20), max(0,color[1]-20), max(0,color[2]-20)),
-                        (cx-s*3//4, cy+s*2//3-5, s*3//2, 12))
-    pygame.draw.ellipse(surface, color, (cx-s*3//4+2, cy+s*2//3-3, s*3//2-4, 8))
-    # clapper
-    pygame.draw.line(surface, (100,85,50), (cx, cy+s//4), (cx+ox, cy+s*2//3-2), 2)
-    pygame.draw.circle(surface, (140,115,60), (cx+ox, cy+s*2//3), 5)
-    # shine
-    pygame.draw.ellipse(surface, (min(255,color[0]+60), min(255,color[1]+50), min(255,color[2]+20)),
-                        (cx-s//4, cy+4, s//5, s//4))
+# ── Helpers ───────────────────────────────────────────────────────────────────
+def draw_rounded_rect(surface, color, rect, radius=6, border=0, border_color=None):
+    pygame.draw.rect(surface, color, rect, border_radius=radius)
+    if border and border_color:
+        pygame.draw.rect(surface, border_color, rect, border, border_radius=radius)
 
-def draw_bell_simple(surface, cx, cy, color, shake=0):
-    ox = int(math.sin(shake*0.8)*6) if shake > 0 else 0
-    x = cx + ox
-    s = 36
-    pygame.draw.rect(surface,(80,70,55),(x-5,cy-s-8,10,10),border_radius=2)
-    pts=[(x-s//2,cy),(x+s//2,cy),(x+s*3//4,cy+s*2//3),(x-s*3//4,cy+s*2//3)]
-    pygame.draw.polygon(surface,color,pts)
-    pygame.draw.polygon(surface,(min(255,color[0]+40),min(255,color[1]+35),min(255,color[2]+10)),pts,2)
-    pygame.draw.ellipse(surface,(max(0,color[0]-30),max(0,color[1]-25),max(0,color[2]-10)),
-                        (x-s*3//4,cy+s*2//3-4,s*3//2,10))
-    pygame.draw.line(surface,(100,85,50),(x,cy+10),(x+ox//2,cy+s*2//3-2),2)
-    pygame.draw.circle(surface,(140,115,60),(x+ox//2,cy+s*2//3),5)
-    pygame.draw.ellipse(surface,(min(255,color[0]+60),min(255,color[1]+50),min(255,color[2]+20)),
-                        (x-8,cy+5,8,12))
+def home_rect(i):
+    x, y = HOME_POS[i]
+    return pygame.Rect(x, y, CARD_W, CARD_H)
 
-# ── pixel art elevator doors ──────────────────────────────────────────────────
-def draw_elevator(surface, x, y, w, h, open_pct=0.0):
-    # frame
-    pygame.draw.rect(surface,(60,52,40),(x-4,y-4,w+8,h+8),border_radius=4)
-    # doors
-    door_w = int((w//2) * (1.0 - open_pct))
-    # left door
-    pygame.draw.rect(surface,C_ELEVATOR,(x, y, door_w, h))
-    if door_w > 2:
-        pygame.draw.rect(surface,(70,62,48),(x,y,door_w,h),1)
-        for dy in range(0,h,20):
-            pygame.draw.line(surface,(55,48,37),(x+2,y+dy),(x+door_w-2,y+dy),1)
-    # right door
-    rx = x + w - door_w
-    pygame.draw.rect(surface,C_ELEVATOR,(rx,y,door_w,h))
-    if door_w > 2:
-        pygame.draw.rect(surface,(70,62,48),(rx,y,door_w,h),1)
-        for dy in range(0,h,20):
-            pygame.draw.line(surface,(55,48,37),(rx+2,y+dy),(rx+door_w-2,y+dy),1)
-    # gap / interior when open
-    if open_pct > 0.05:
-        interior_x = x + door_w
-        interior_w = w - door_w*2
-        if interior_w > 0:
-            pygame.draw.rect(surface,(28,22,14),(interior_x,y,interior_w,h))
-            # interior light
-            pygame.draw.rect(surface,(60,50,30),(interior_x,y,interior_w,6))
-    # button panel
-    pygame.draw.rect(surface,(50,42,30),(x+w+8,y+h//2-20,18,40),border_radius=3)
-    for bi,bc in enumerate([(80,160,80),(160,80,80)]):
-        pygame.draw.circle(surface,bc,(x+w+17,y+h//2-8+bi*18),5)
-    # floor indicator
-    surf = FONT_TINY.render("2F", True, C_ACCENT)
-    WIN.blit(surf,(x+w//2-surf.get_width()//2, y-20))
-
-# ── card drawing ──────────────────────────────────────────────────────────────
-CARD_W, CARD_H = 150, 185
-
-def draw_card(surface, item, x, y, highlighted=False, dragging=False):
-    col = item["color"]
-    alpha = 230 if dragging else 255
-    shadow_offset = 8 if dragging else 3
-    # shadow
-    shadow = pygame.Surface((CARD_W, CARD_H), pygame.SRCALPHA)
-    shadow.fill((0,0,0,60))
-    surface.blit(shadow,(x+shadow_offset, y+shadow_offset))
-    # card body
-    card = pygame.Surface((CARD_W, CARD_H), pygame.SRCALPHA)
-    pygame.draw.rect(card,(*C_PANEL,alpha),(0,0,CARD_W,CARD_H),border_radius=8)
-    # colored top strip
-    pygame.draw.rect(card,(*col,alpha),(0,0,CARD_W,44),border_radius=8)
-    pygame.draw.rect(card,(0,0,0,0),(0,22,CARD_W,22))  # square off bottom of strip
-    pygame.draw.rect(card,(*col,alpha),(0,22,CARD_W,22))
-    surface.blit(card,(x,y))
-    # border
-    border_col = C_BORDER_HI if highlighted else C_BORDER
-    pygame.draw.rect(surface, border_col,(x,y,CARD_W,CARD_H),2,border_radius=8)
-    # icon
-    ICON_DRAWERS[item["icon"]](surface, x+CARD_W//2, y+22, size=26,
-                               color=(min(255,col[0]+80),min(255,col[1]+80),min(255,col[2]+80)))
-    # divider
-    pygame.draw.line(surface,C_BORDER,(x+10,y+48),(x+CARD_W-10,y+48),1)
-    # time — big
-    t_surf = FONT_TIME.render(item["time"], True, C_ACCENT)
-    surface.blit(t_surf,(x+CARD_W//2-t_surf.get_width()//2, y+54))
-    # name
-    name_surf = FONT_TINY.render(item["name"], True, C_TEXT)
-    surface.blit(name_surf,(x+CARD_W//2-name_surf.get_width()//2, y+80))
-    # detail lines
-    for li, line in enumerate(item["detail"].split("\n")):
-        d_surf = FONT_TINY.render(line, True, C_DIM)
-        surface.blit(d_surf,(x+CARD_W//2-d_surf.get_width()//2, y+98+li*14))
-    # drag handle dots
-    if not dragging:
-        for di in range(3):
-            pygame.draw.circle(surface,(80,65,45),(x+CARD_W//2-12+di*12, y+CARD_H-14),2)
-
-# ── slot drawing ──────────────────────────────────────────────────────────────
-SLOT_W, SLOT_H = CARD_W + 10, CARD_H + 10
-SLOT_LABELS = ["1st", "2nd", "3rd", "4th"]
-
-def draw_slot(surface, idx, x, y, occupied=False, correct=None):
-    col = C_CORRECT if correct==True else (C_WRONG if correct==False else C_SLOT_BORDER)
-    pygame.draw.rect(surface, C_SLOT_EMPTY, (x,y,SLOT_W,SLOT_H), border_radius=8)
-    pygame.draw.rect(surface, col,          (x,y,SLOT_W,SLOT_H), 2, border_radius=8)
-    if not occupied:
-        lbl = FONT_BODY.render(SLOT_LABELS[idx], True,(50,40,25))
-        surface.blit(lbl,(x+SLOT_W//2-lbl.get_width()//2, y+SLOT_H//2-lbl.get_height()//2))
-
-# ── state ─────────────────────────────────────────────────────────────────────
-# slots: list of item id or None
-slots = [None, None, None, None]
-# tray: unplaced items  (start with all 4 shuffled)
-import random
-tray_order = [0,1,2,3]
-random.shuffle(tray_order)
-
-dragging_id   = None   # item id being dragged
-drag_offset   = (0,0)
-drag_pos      = (0,0)
-drag_source   = None   # ("slot", idx) or ("tray", idx)
-
-bell_shake    = 0.0    # countdown timer for shake
-bell_color    = C_BELL_IDLE
-bell_ring     = 0.0    # countdown for ring animation
-elev_open     = 0.0    # 0..1
-solved        = False
-
-# layout
-TRAY_Y       = 450
-SLOT_Y       = 220
-SLOTS_START_X = (WIDTH - (4*SLOT_W + 3*20)) // 2
-TRAY_START_X  = (WIDTH - (4*(CARD_W+12))) // 2
-
-def slot_rect(idx):
-    return pygame.Rect(SLOTS_START_X + idx*(SLOT_W+20), SLOT_Y, SLOT_W, SLOT_H)
-
-def tray_rect(tray_idx):
-    return pygame.Rect(TRAY_START_X + tray_idx*(CARD_W+12), TRAY_Y, CARD_W, CARD_H)
-
-def item_by_id(iid):
-    return next(i for i in ITEMS if i["id"]==iid)
-
-def check_correct():
-    for slot_idx, item_id in enumerate(slots):
-        if item_id is None: return False
-        if item_by_id(item_id)["correct_pos"] != slot_idx:
-            return False
-    return True
-
-def slot_correctness(slot_idx):
-    iid = slots[slot_idx]
-    if iid is None: return None
-    return item_by_id(iid)["correct_pos"] == slot_idx
-
-# ── background ────────────────────────────────────────────────────────────────
-def draw_bg():
+# ── Draw main screen ──────────────────────────────────────────────────────────
+def draw_floor2(state, pulse):
     WIN.fill(C_BG)
-    # floor
-    pygame.draw.rect(WIN, C_FLOOR, (0, HEIGHT-120, WIDTH, 120))
-    # wall baseboard
-    pygame.draw.rect(WIN, (40,32,22), (0, HEIGHT-124, WIDTH, 5))
-    # tile grid on floor
-    for gx in range(0, WIDTH, 40):
-        pygame.draw.line(WIN,(42,34,24),(gx,HEIGHT-120),(gx,HEIGHT),1)
-    for gy in range(HEIGHT-120, HEIGHT, 40):
-        pygame.draw.line(WIN,(42,34,24),(0,gy),(WIDTH,gy),1)
-    # wall sconces
-    for sx in [120, WIDTH-120]:
-        pygame.draw.rect(WIN,(55,45,30),(sx-6,60,12,30),border_radius=3)
-        pygame.draw.circle(WIN,(180,150,60),(sx,58),8)
-        # light cone
-        cone = pygame.Surface((60,80),pygame.SRCALPHA)
-        pygame.draw.polygon(cone,(180,150,60,18),[(30,0),(0,80),(60,80)])
-        WIN.blit(cone,(sx-30,66))
 
-def draw_hud():
-    bar = pygame.Surface((WIDTH,52),pygame.SRCALPHA)
-    bar.fill((10,8,5,215))
-    WIN.blit(bar,(0,0))
-    title = FONT_TITLE.render("TIMELINE RECONSTRUCTION  ·  2nd Floor Bell", True, C_ACCENT)
-    WIN.blit(title,(20,13))
-    hint = FONT_SMALL.render("Drag each item into the correct chronological order", True, C_DIM)
-    WIN.blit(hint,(WIDTH-hint.get_width()-20,18))
+    # title + instruction
+    title = FONT_TITLE.render("Bell Tower — 2nd Floor", True, C_ACCENT)
+    WIN.blit(title, (WIDTH // 2 - title.get_width() // 2, 8))
+    instr = FONT_SMALL.render(
+        "Drag cards into slots (earliest #1 → latest #5).  Click a card to inspect it.  Right-click a slot to clear.",
+        True, (100, 85, 60))
+    WIN.blit(instr, (WIDTH // 2 - instr.get_width() // 2, 36))
+    pygame.draw.line(WIN, (60, 45, 25), (40, 56), (WIDTH - 40, 56), 1)
 
-def draw_labels():
-    # slot row label
-    lbl = FONT_SMALL.render("Arrange in order  →  earliest to latest", True, C_DIM)
-    WIN.blit(lbl,(WIDTH//2-lbl.get_width()//2, SLOT_Y - 26))
-    # arrow
-    for i in range(3):
-        ax = SLOTS_START_X + (i+1)*(SLOT_W+20) - 14
-        ay = SLOT_Y + SLOT_H//2
-        pygame.draw.polygon(WIN,C_DIM,[(ax,ay-4),(ax+10,ay),(ax,ay+4)])
-    # tray label
-    tray_lbl = FONT_SMALL.render("Evidence found on 2nd floor:", True, C_DIM)
-    WIN.blit(tray_lbl,(WIDTH//2-tray_lbl.get_width()//2, TRAY_Y - 22))
+    # ── cards ────────────────────────────────────────────────────────────────
+    drag_i = state["drag"]["clue"] if state["drag"] else None
+    draw_order = [i for i in range(5) if i != drag_i]
+    if drag_i is not None:
+        draw_order.append(drag_i)
 
-def draw_solved_overlay(elev_open_pct):
-    overlay = pygame.Surface((WIDTH,HEIGHT),pygame.SRCALPHA)
-    overlay.fill((0,0,0,int(80*elev_open_pct)))
-    WIN.blit(overlay,(0,0))
-    if elev_open_pct > 0.3:
-        msg = FONT_BIG.render("The bell rings!", True, C_BELL_RING)
-        WIN.blit(msg,(WIDTH//2-msg.get_width()//2,130))
-    if elev_open_pct > 0.6:
-        sub = FONT_BODY.render("The elevator opens — proceed to the 3rd floor.", True, C_TEXT)
-        WIN.blit(sub,(WIDTH//2-sub.get_width()//2,175))
+    for i in draw_order:
+        dragging = (i == drag_i)
+        in_slot  = i in state["slots"]
 
-# ── main loop ─────────────────────────────────────────────────────────────────
+        if dragging:
+            mx, my = state["drag"]["mx"], state["drag"]["my"]
+            ox, oy = state["drag"]["ox"], state["drag"]["oy"]
+            draw_rect = pygame.Rect(mx - ox, my - oy, CARD_W, CARD_H)
+        else:
+            draw_rect = home_rect(i)
+
+        pygame.draw.rect(WIN, (30, 24, 16), draw_rect, border_radius=4)
+        img = scale_fit(CLUE_IMGS[i], CARD_W, CARD_H)
+
+        if in_slot and not dragging:
+            WIN.blit(img, draw_rect.topleft)
+            dim = pygame.Surface((CARD_W, CARD_H), pygame.SRCALPHA)
+            dim.fill((0, 0, 0, 110))
+            WIN.blit(dim, draw_rect.topleft)
+        else:
+            WIN.blit(img, draw_rect.topleft)
+
+        bcol = C_FOUND if dragging else ((80, 180, 80) if in_slot else (90, 70, 45))
+        pygame.draw.rect(WIN, bcol, draw_rect, 2, border_radius=4)
+
+        # "🔍 inspect" hint in bottom-left corner of card
+        if not dragging:
+            hint = FONT_SMALL.render("click to inspect", True, (120, 100, 60))
+            hbg  = pygame.Surface((hint.get_width() + 6, hint.get_height() + 2), pygame.SRCALPHA)
+            hbg.fill((0, 0, 0, 150))
+            WIN.blit(hbg, (draw_rect.x + 2, draw_rect.bottom - hint.get_height() - 4))
+            WIN.blit(hint, (draw_rect.x + 5, draw_rect.bottom - hint.get_height() - 3))
+
+        # label below card
+        tag_col = (100, 200, 100) if in_slot else (180, 155, 100)
+        tag = FONT_SMALL.render(CLUE_LABELS[i], True, tag_col)
+        tbg = pygame.Surface((tag.get_width() + 6, tag.get_height() + 2), pygame.SRCALPHA)
+        tbg.fill((0, 0, 0, 160))
+        WIN.blit(tbg, (draw_rect.x, draw_rect.bottom + 1))
+        WIN.blit(tag, (draw_rect.x + 3, draw_rect.bottom + 2))
+
+        # slot number badge
+        for si, sv in enumerate(state["slots"]):
+            if sv == i:
+                badge = FONT_SMALL.render(f"#{si+1}", True, C_FOUND)
+                bsurf = pygame.Surface((badge.get_width() + 6, badge.get_height() + 2), pygame.SRCALPHA)
+                bsurf.fill((0, 0, 0, 180))
+                WIN.blit(bsurf, (draw_rect.right - badge.get_width() - 9, draw_rect.y + 2))
+                WIN.blit(badge, (draw_rect.right - badge.get_width() - 6, draw_rect.y + 3))
+
+    # ── slot label ────────────────────────────────────────────────────────────
+    slbl = FONT_BODY.render("Chronological order — earliest to latest:", True, C_TEXT)
+    WIN.blit(slbl, (WIDTH // 2 - slbl.get_width() // 2, SLOT_Y - 24))
+
+    # ── slots ─────────────────────────────────────────────────────────────────
+    for s, srect in enumerate(SLOT_RECTS):
+        filled   = state["slots"][s] is not None
+        hovering = (state["drag"] is not None and srect.collidepoint(
+            state["drag"]["mx"], state["drag"]["my"]))
+
+        bg  = (55, 44, 22) if hovering else ((35, 28, 18) if filled else (18, 14, 10))
+        bdr = (255, 240, 120) if hovering else (C_FOUND if filled else (70, 55, 30))
+        draw_rounded_rect(WIN, bg, srect, radius=6, border=2, border_color=bdr)
+
+        snum = FONT_BODY.render(f"#{s+1}", True, (80, 65, 40))
+        WIN.blit(snum, (srect.x + 6, srect.y + 4))
+
+        if filled:
+            ci    = state["slots"][s]
+            thumb = scale_fit(CLUE_IMGS[ci], srect.w - 8, srect.h - 24)
+            WIN.blit(thumb, (srect.x + 4, srect.y + 16))
+            tlbl = FONT_SMALL.render(CLUE_TIMES[ci], True, C_FOUND)
+            WIN.blit(tlbl, (srect.centerx - tlbl.get_width() // 2, srect.bottom - 13))
+            xlbl = FONT_SMALL.render("x", True, (180, 80, 60))
+            WIN.blit(xlbl, (srect.right - xlbl.get_width() - 4, srect.y + 3))
+        else:
+            ph = FONT_BODY.render("?", True, (55, 44, 28))
+            WIN.blit(ph, (srect.centerx - ph.get_width() // 2,
+                          srect.centery - ph.get_height() // 2))
+
+    # ── ring bell button ──────────────────────────────────────────────────────
+    if all(s is not None for s in state["slots"]) and not state["solved"]:
+        pc = int(185 + 50 * math.sin(pulse * 3))
+        draw_rounded_rect(WIN, (55, 36, 8), BELL_BTN, radius=6,
+                          border=2, border_color=(pc, pc // 2, 10))
+        blbl = FONT_BODY.render("Ring the Bell!", True, (pc, max(0, pc - 50), 10))
+        WIN.blit(blbl, (BELL_BTN.centerx - blbl.get_width() // 2,
+                         BELL_BTN.centery - blbl.get_height() // 2))
+
+    # ── wrong flash ───────────────────────────────────────────────────────────
+    if state["wrong_flash"] > 0:
+        ws = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        ws.fill((180, 30, 30, min(130, state["wrong_flash"] * 5)))
+        WIN.blit(ws, (0, 0))
+        wt = FONT_TITLE.render("Incorrect order — try again!", True, (255, 110, 90))
+        WIN.blit(wt, (WIDTH // 2 - wt.get_width() // 2, HEIGHT // 2 - 20))
+
+    # ── bell ringing ──────────────────────────────────────────────────────────
+    if state["bell_ringing"] > 0:
+        t     = state["bell_ringing"]
+        shake = int(8 * math.sin(t * 0.9)) if t > 20 else 0
+        rs    = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        rs.fill((255, 210, 40, min(150, t * 4)))
+        WIN.blit(rs, (shake, 0))
+        rt = FONT_TITLE.render("DING  DONG", True, (255, 240, 80))
+        WIN.blit(rt, (WIDTH // 2 - rt.get_width() // 2 + shake, HEIGHT // 2 - 50))
+        et = FONT_BODY.render("The elevator opens...", True, C_TEXT)
+        WIN.blit(et, (WIDTH // 2 - et.get_width() // 2, HEIGHT // 2 + 10))
+
+    # ── inspect overlay (drawn last so it's on top of everything) ─────────────
+    if state["inspect"] is not None:
+        _draw_inspect(state, pulse)
+
+
+def _draw_inspect(state, pulse):
+    """Big image popup with prev/next navigation and close button."""
+    ci = state["inspect"]
+
+    # dim background
+    ov = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    ov.fill((0, 0, 0, 220))
+    WIN.blit(ov, (0, 0))
+
+    # image panel
+    iw, ih = 700, 480
+    ix = WIDTH // 2 - iw // 2
+    iy = HEIGHT // 2 - ih // 2 - 20
+
+    pygame.draw.rect(WIN, (30, 24, 16), (ix, iy, iw, ih), border_radius=8)
+    big = scale_fit(CLUE_IMGS[ci], iw, ih)
+    WIN.blit(big, (ix, iy))
+    pygame.draw.rect(WIN, C_ACCENT, (ix, iy, iw, ih), 2, border_radius=8)
+
+    # title above
+    ilbl = FONT_TITLE.render(CLUE_LABELS[ci], True, C_ACCENT)
+    WIN.blit(ilbl, (WIDTH // 2 - ilbl.get_width() // 2, iy - 34))
+
+    # time below
+    itme = FONT_BODY.render(f"Time: {CLUE_TIMES[ci]}", True, C_FOUND)
+    WIN.blit(itme, (WIDTH // 2 - itme.get_width() // 2, iy + ih + 6))
+
+    # ── close button ─────────────────────────────────────────────────────────
+    close_lbl = FONT_BODY.render("✕  Close", True, C_TEXT)
+    close_rect = pygame.Rect(WIDTH // 2 - 50, iy + ih + 30, 100, 28)
+    draw_rounded_rect(WIN, (70, 45, 14), close_rect, radius=5,
+                      border=1, border_color=(140, 90, 30))
+    WIN.blit(close_lbl, (close_rect.centerx - close_lbl.get_width() // 2,
+                          close_rect.centery - close_lbl.get_height() // 2))
+    state["_close_rect"] = close_rect
+
+    # ── prev button ───────────────────────────────────────────────────────────
+    prev_rect = pygame.Rect(ix - 54, iy + ih // 2 - 22, 46, 44)
+    draw_rounded_rect(WIN, (50, 38, 18), prev_rect, radius=6,
+                      border=1, border_color=(120, 90, 30))
+    pa = FONT_TITLE.render("‹", True, C_TEXT)
+    WIN.blit(pa, (prev_rect.centerx - pa.get_width() // 2,
+                   prev_rect.centery - pa.get_height() // 2))
+    state["_prev_rect"] = prev_rect
+
+    # ── next button ───────────────────────────────────────────────────────────
+    next_rect = pygame.Rect(ix + iw + 8, iy + ih // 2 - 22, 46, 44)
+    draw_rounded_rect(WIN, (50, 38, 18), next_rect, radius=6,
+                      border=1, border_color=(120, 90, 30))
+    na = FONT_TITLE.render("›", True, C_TEXT)
+    WIN.blit(na, (next_rect.centerx - na.get_width() // 2,
+                   next_rect.centery - na.get_height() // 2))
+    state["_next_rect"] = next_rect
+
+    # thumbnail strip at bottom for quick navigation
+    strip_y  = iy + ih + 62
+    thumb_w, thumb_h = 90, 60
+    total_strip = 5 * thumb_w + 4 * 8
+    strip_x = WIDTH // 2 - total_strip // 2
+    for j in range(5):
+        tx = strip_x + j * (thumb_w + 8)
+        trect = pygame.Rect(tx, strip_y, thumb_w, thumb_h)
+        is_current = (j == ci)
+        bdr_col = C_FOUND if is_current else (80, 65, 40)
+        pygame.draw.rect(WIN, (25, 20, 12), trect, border_radius=4)
+        t_img = scale_fit(CLUE_IMGS[j], thumb_w, thumb_h)
+        WIN.blit(t_img, trect.topleft)
+        pygame.draw.rect(WIN, bdr_col, trect, 2 if not is_current else 3, border_radius=4)
+        if is_current:
+            # highlight glow
+            glow_s = pygame.Surface((thumb_w, thumb_h), pygame.SRCALPHA)
+            pygame.draw.rect(glow_s, (*C_FOUND, 40), glow_s.get_rect(), border_radius=4)
+            WIN.blit(glow_s, trect.topleft)
+        tlbl = FONT_SMALL.render(CLUE_LABELS[j], True,
+                                  C_FOUND if is_current else (100, 85, 55))
+        WIN.blit(tlbl, (trect.centerx - tlbl.get_width() // 2, trect.bottom + 2))
+
+    # store thumb rects for click detection
+    state["_thumb_rects"] = [
+        pygame.Rect(strip_x + j * (thumb_w + 8), strip_y, thumb_w, thumb_h)
+        for j in range(5)
+    ]
+
+
+def draw_final_screen(state, pulse):
+    WIN.fill((12, 9, 6))
+
+    title = FONT_TITLE.render("Timeline Reconstructed", True, C_ACCENT)
+    WIN.blit(title, (WIDTH // 2 - title.get_width() // 2, 30))
+    sub = FONT_BODY.render("The events of the night, in order:", True, C_TEXT)
+    WIN.blit(sub, (WIDTH // 2 - sub.get_width() // 2, 66))
+
+    panel_w, panel_h = 190, 240
+    total_w = 5 * panel_w + 4 * 14
+    start_x = (WIDTH - total_w) // 2
+
+    for rank, ci in enumerate(state["slots"]):
+        if ci is None:
+            continue
+        bx = start_x + rank * (panel_w + 14)
+        by = 110
+        panel = pygame.Rect(bx, by, panel_w, panel_h)
+        draw_rounded_rect(WIN, (25, 20, 14), panel, radius=8,
+                          border=2, border_color=C_PANEL_BORDER)
+        pygame.draw.rect(WIN, (30, 24, 16), (bx + 4, by + 4, panel_w - 8, 120), border_radius=4)
+        thumb = scale_fit(CLUE_IMGS[ci], panel_w - 8, 120)
+        WIN.blit(thumb, (bx + 4, by + 4))
+
+        rank_lbl = FONT_TITLE.render(f"#{rank+1}", True, C_ACCENT)
+        WIN.blit(rank_lbl, (bx + panel_w // 2 - rank_lbl.get_width() // 2, by + 130))
+
+        lbl = FONT_SMALL.render(CLUE_LABELS[ci], True, (140, 115, 75))
+        WIN.blit(lbl, (bx + panel_w // 2 - lbl.get_width() // 2, by + 158))
+
+        alpha = int(55 + 35 * math.sin(pulse + rank))
+        glow = pygame.Surface((panel_w - 8, 34), pygame.SRCALPHA)
+        pygame.draw.rect(glow, (*C_ACCENT, alpha), glow.get_rect(), border_radius=4)
+        WIN.blit(glow, (bx + 4, by + 178))
+        time_lbl = FONT_BODY.render(CLUE_TIMES[ci], True, C_FOUND)
+        WIN.blit(time_lbl, (bx + panel_w // 2 - time_lbl.get_width() // 2, by + 184))
+
+        if rank < 4:
+            ax = bx + panel_w + 7
+            ay = by + panel_h // 2
+            pygame.draw.polygon(WIN, (120, 95, 40), [
+                (ax, ay - 6), (ax + 10, ay), (ax, ay + 6)
+            ])
+
+    footer = FONT_SMALL.render(
+        "Use this timeline to piece together what happened that night.",
+        True, (80, 68, 50))
+    WIN.blit(footer, (WIDTH // 2 - footer.get_width() // 2, HEIGHT - 30))
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 def main():
-    global dragging_id, drag_offset, drag_pos, drag_source
-    global bell_shake, bell_color, bell_ring, elev_open, solved, slots, tray_order
-
     clock = pygame.time.Clock()
-    tick = 0
+    pulse = 0.0
+
+    state = {
+        "slots":        [None] * 5,
+        "drag":         None,
+        "inspect":      None,   # index of card being inspected, or None
+        "bell_ringing": 0,
+        "wrong_flash":  0,
+        "solved":       False,
+        "_close_rect":  None,
+        "_prev_rect":   None,
+        "_next_rect":   None,
+        "_thumb_rects": [],
+    }
 
     run = True
     while run:
-        dt = clock.tick(60) / 1000.0
-        tick += 1
-        mx,my = pygame.mouse.get_pos()
+        clock.tick(60)
+        pulse += 0.06
+        mx, my = pygame.mouse.get_pos()
 
-        # decay timers
-        if bell_shake > 0:
-            bell_shake = max(0.0, bell_shake - dt*4)
-            bell_color = C_WRONG if bell_shake > 0.1 else C_BELL_IDLE
-        if bell_ring > 0:
-            bell_ring = max(0.0, bell_ring - dt*0.5)
-            bell_color = C_BELL_RING
-        if solved and elev_open < 1.0:
-            elev_open = min(1.0, elev_open + dt*0.4)
+        if state["drag"] is not None:
+            state["drag"]["mx"] = mx
+            state["drag"]["my"] = my
 
-        # ── events ──
+        if state["bell_ringing"] > 0:
+            state["bell_ringing"] -= 1
+        if state["wrong_flash"] > 0:
+            state["wrong_flash"] -= 1
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
 
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button==1 and not solved:
-                # check slots
-                for si in range(4):
-                    sr = slot_rect(si)
-                    if sr.collidepoint(mx,my) and slots[si] is not None:
-                        dragging_id  = slots[si]
-                        drag_source  = ("slot", si)
-                        drag_offset  = (mx-(sr.x+5), my-(sr.y+5))
-                        drag_pos     = (mx-drag_offset[0], my-drag_offset[1])
-                        slots[si]    = None
-                        break
-                else:
-                    # check tray
-                    for ti, iid in enumerate(tray_order):
-                        if iid is not None:
-                            tr = tray_rect(ti)
-                            if tr.collidepoint(mx,my):
-                                dragging_id = iid
-                                drag_source = ("tray", ti)
-                                drag_offset = (mx-tr.x, my-tr.y)
-                                drag_pos    = (mx-drag_offset[0], my-drag_offset[1])
-                                tray_order[ti] = None
+            # ── inspect overlay input ─────────────────────────────────────────
+            if state["inspect"] is not None:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    # close
+                    if state["_close_rect"] and state["_close_rect"].collidepoint(mx, my):
+                        state["inspect"] = None
+
+                    # prev
+                    elif state["_prev_rect"] and state["_prev_rect"].collidepoint(mx, my):
+                        state["inspect"] = (state["inspect"] - 1) % 5
+
+                    # next
+                    elif state["_next_rect"] and state["_next_rect"].collidepoint(mx, my):
+                        state["inspect"] = (state["inspect"] + 1) % 5
+
+                    # thumbnail strip
+                    else:
+                        for j, trect in enumerate(state.get("_thumb_rects", [])):
+                            if trect.collidepoint(mx, my):
+                                state["inspect"] = j
                                 break
 
-            if event.type == pygame.MOUSEMOTION and dragging_id is not None:
-                drag_pos = (mx-drag_offset[0], my-drag_offset[1])
+                if event.type == pygame.KEYDOWN:
+                    if event.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE):
+                        state["inspect"] = None
+                    elif event.key == pygame.K_LEFT:
+                        state["inspect"] = (state["inspect"] - 1) % 5
+                    elif event.key == pygame.K_RIGHT:
+                        state["inspect"] = (state["inspect"] + 1) % 5
+                continue   # block all other input while inspecting
 
-            if event.type == pygame.MOUSEBUTTONUP and event.button==1 and dragging_id is not None:
-                placed = False
-                # try to drop on a slot
-                for si in range(4):
-                    sr = slot_rect(si)
-                    if sr.inflate(20,20).collidepoint(mx,my):
-                        if slots[si] is None:
-                            slots[si] = dragging_id
-                            placed = True
-                        else:
-                            # swap
-                            displaced = slots[si]
-                            slots[si] = dragging_id
-                            # put displaced back in tray
-                            for ti in range(4):
-                                if tray_order[ti] is None:
-                                    tray_order[ti] = displaced
-                                    break
-                            placed = True
-                        break
-                if not placed:
-                    # return to tray
-                    for ti in range(4):
-                        if tray_order[ti] is None:
-                            tray_order[ti] = dragging_id
-                            break
-                dragging_id = None
-                drag_source = None
+            if state["solved"] and state["bell_ringing"] == 0:
+                continue
 
-                # check if all slots filled → validate
-                if all(s is not None for s in slots):
-                    if check_correct():
-                        solved   = True
-                        bell_ring = 2.0
-                        bell_color= C_BELL_RING
+            # ── mouse down ────────────────────────────────────────────────────
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                # ring bell
+                if all(s is not None for s in state["slots"]) and BELL_BTN.collidepoint(mx, my):
+                    if state["slots"] == CORRECT_ORDER:
+                        state["bell_ringing"] = 100
+                        state["solved"]       = True
                     else:
-                        bell_shake = 1.4
-                        bell_color = C_WRONG
+                        state["wrong_flash"] = 45
+                        state["slots"]       = [None] * 5
+                    continue
 
-        # ── draw ──
-        draw_bg()
-        draw_hud()
-        draw_labels()
+                # pick up card
+                for i in reversed(range(5)):
+                    if home_rect(i).collidepoint(mx, my):
+                        hx, hy = HOME_POS[i]
+                        state["drag"] = {
+                            "clue":  i,
+                            "mx":    mx, "my": my,
+                            "ox":    mx - hx,
+                            "oy":    my - hy,
+                            "start": (mx, my),
+                        }
+                        break
 
-        # elevator on right wall
-        draw_elevator(WIN, WIDTH-130, HEIGHT-200, 90, 165, open_pct=elev_open)
+            # ── mouse up ──────────────────────────────────────────────────────
+            if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                if state["drag"] is not None:
+                    ci     = state["drag"]["clue"]
+                    sx, sy = state["drag"]["start"]
+                    moved  = abs(mx - sx) > 6 or abs(my - sy) > 6
 
-        # bell — top center, animated
-        bell_anim = bell_ring if bell_ring > 0 else bell_shake
-        draw_bell_simple(WIN, WIDTH//2, 90, bell_color, shake=bell_anim * 6)
+                    if moved:
+                        for s, srect in enumerate(SLOT_RECTS):
+                            if srect.collidepoint(mx, my):
+                                existing = state["slots"][s]
+                                for s2 in range(5):
+                                    if state["slots"][s2] == ci:
+                                        state["slots"][s2] = existing
+                                        break
+                                state["slots"][s] = ci
+                                break
+                    else:
+                        # short click → open inspect
+                        state["inspect"] = ci
 
-        # slots
-        for si in range(4):
-            sr = slot_rect(si)
-            occupied = slots[si] is not None
-            correct  = slot_correctness(si) if occupied else None
-            draw_slot(WIN, si, sr.x, sr.y, occupied=occupied, correct=correct)
-            if occupied:
-                draw_card(WIN, item_by_id(slots[si]), sr.x+5, sr.y+5,
-                          highlighted=False)
+                    state["drag"] = None
 
-        # tray cards
-        for ti, iid in enumerate(tray_order):
-            if iid is not None:
-                tr = tray_rect(ti)
-                hovered = tr.collidepoint(mx,my) and dragging_id is None
-                draw_card(WIN, item_by_id(iid), tr.x, tr.y, highlighted=hovered)
+            # right-click slot to clear
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+                for s, srect in enumerate(SLOT_RECTS):
+                    if srect.collidepoint(mx, my):
+                        state["slots"][s] = None
 
-        # dragging card — on top of everything
-        if dragging_id is not None:
-            draw_card(WIN, item_by_id(dragging_id), drag_pos[0], drag_pos[1],
-                      highlighted=True, dragging=True)
-            pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_HAND)
+        pygame.mouse.set_cursor(
+            pygame.SYSTEM_CURSOR_HAND if state["drag"] else pygame.SYSTEM_CURSOR_ARROW
+        )
+
+        WIN.fill(C_BG)
+        if state["solved"] and state["bell_ringing"] == 0:
+            draw_final_screen(state, pulse)
         else:
-            # hover cursor
-            hovering = any(slot_rect(si).collidepoint(mx,my) and slots[si] is not None for si in range(4))
-            hovering = hovering or any(
-                tray_rect(ti).collidepoint(mx,my) for ti,iid in enumerate(tray_order) if iid is not None)
-            pygame.mouse.set_cursor(
-                pygame.SYSTEM_CURSOR_HAND if hovering else pygame.SYSTEM_CURSOR_ARROW)
-
-        if solved:
-            draw_solved_overlay(elev_open)
+            draw_floor2(state, pulse)
 
         pygame.display.update()
 
     pygame.quit()
+
 
 if __name__ == "__main__":
     main()
