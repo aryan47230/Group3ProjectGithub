@@ -1,5 +1,7 @@
 import pygame
 import sys
+import subprocess
+import os
 
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
@@ -16,17 +18,11 @@ RED    = (220,  50,  50)
 # Press D in-game to show/hide them for tuning.
 COLLISION_RECTS = [
     # top wall
-    pygame.Rect(  0,   0, 800,  75),
+    pygame.Rect(  0,   0, 800, 200),
+    # left wall segment
+    pygame.Rect(  0, 200,  50, 200),
     # central back staircase
     pygame.Rect(275,  75, 250, 195),
-    # back-left table & chairs cluster
-    pygame.Rect(  0, 210, 250, 130),
-    # back-right counter
-    pygame.Rect(490, 195, 310, 135),
-    # front center sofa group
-    pygame.Rect(  0, 457, 800, 83),
-    # bottom wall
-    pygame.Rect(  0, 555, 800,  45),
 ]
 
 
@@ -126,11 +122,61 @@ def main() -> None:
     ).convert()
     background = pygame.transform.scale(background, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
+    background_3rd = pygame.image.load(
+        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/dark_3rd_floor.png"
+    ).convert()
+    background_3rd = pygame.transform.scale(background_3rd, (SCREEN_WIDTH, SCREEN_HEIGHT))
+
+    FLOOR_TRIGGER = pygame.Rect(350, 200, 100, 100)   # near x=400, y=250
+    on_3rd_floor = False
+
+    coffee_img = pygame.image.load(
+        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/coffee.png"
+    ).convert_alpha()
+    coffee_img = pygame.transform.scale(coffee_img, (38, 38))
+    coffee_rect = coffee_img.get_rect(topleft=(350, 410))
+
     player = Player(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
     all_sprites = pygame.sprite.Group(player)
     debug = False
 
+    PUZZLE1_TRIGGER = pygame.Rect(700, 350, 260, 65)
+    SLIDING_PUZZLE_PATH = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/sliding_puzzle.py"
+    PUZZLE1_FLAG = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/puzzle1_complete.txt"
+
+    PUZZLE2_TRIGGER = pygame.Rect(170, 320, 100, 80)   # near x=200, y=350
+    CYPHER_PATH = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/cypher.py"
+    PUZZLE2_FLAG = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/puzzle2_complete.txt"
+
+    STAIRCASE_RECT = pygame.Rect(275, 75, 250, 195)
+
+    puzzle1_done = os.path.exists(PUZZLE1_FLAG)
+    puzzle2_done = os.path.exists(PUZZLE2_FLAG)
+    if puzzle2_done and STAIRCASE_RECT in COLLISION_RECTS:
+        COLLISION_RECTS.remove(STAIRCASE_RECT)
+
+    wellDone_timer = 0   # frames remaining to show completion message
+
+    prompt_font = pygame.font.SysFont("monospace", 13, bold=True)
+
     while True:
+        # Check puzzle completions from subprocesses
+        if not puzzle1_done and os.path.exists(PUZZLE1_FLAG):
+            puzzle1_done = True
+            wellDone_timer = FPS * 6
+
+        if not puzzle2_done and os.path.exists(PUZZLE2_FLAG):
+            puzzle2_done = True
+            wellDone_timer = FPS * 6
+            if STAIRCASE_RECT in COLLISION_RECTS:
+                COLLISION_RECTS.remove(STAIRCASE_RECT)
+
+        near_puzzle1 = (not puzzle1_done) and PUZZLE1_TRIGGER.colliderect(player.rect)
+        near_puzzle2 = puzzle1_done and (not puzzle2_done) and PUZZLE2_TRIGGER.colliderect(player.rect)
+
+        if FLOOR_TRIGGER.colliderect(player.rect):
+            on_3rd_floor = True
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -141,11 +187,58 @@ def main() -> None:
                     sys.exit()
                 if event.key == pygame.K_d:
                     debug = not debug
+                if event.key == pygame.K_e and near_puzzle1:
+                    subprocess.Popen(
+                        [sys.executable, SLIDING_PUZZLE_PATH],
+                        cwd="/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project"
+                    )
+                if event.key == pygame.K_e and near_puzzle2:
+                    subprocess.Popen(
+                        [sys.executable, CYPHER_PATH],
+                        cwd="/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project"
+                    )
+
+        if wellDone_timer > 0:
+            wellDone_timer -= 1
 
         all_sprites.update()
 
-        screen.blit(background, (0, 0))
+        screen.blit(background_3rd if on_3rd_floor else background, (0, 0))
+        draw_grid(screen)
+        screen.blit(coffee_img, coffee_rect)
         all_sprites.draw(screen)
+
+        if near_puzzle1:
+            label = prompt_font.render("Puzzle 1  [Press E to open]", True, WHITE)
+            bg = pygame.Surface((label.get_width() + 16, label.get_height() + 10), pygame.SRCALPHA)
+            bg.fill((0, 0, 0, 160))
+            bx = max(0, player.rect.centerx - bg.get_width() // 2)
+            by = player.rect.top - bg.get_height() - 8
+            if by < 0:
+                by = player.rect.bottom + 8
+            screen.blit(bg, (bx, by))
+            screen.blit(label, (bx + 8, by + 5))
+
+        if near_puzzle2:
+            label = prompt_font.render("Puzzle 2  [Press E to open]", True, WHITE)
+            bg = pygame.Surface((label.get_width() + 16, label.get_height() + 10), pygame.SRCALPHA)
+            bg.fill((0, 0, 0, 160))
+            bx = max(0, player.rect.centerx - bg.get_width() // 2)
+            by = player.rect.top - bg.get_height() - 8
+            if by < 0:
+                by = player.rect.bottom + 8
+            screen.blit(bg, (bx, by))
+            screen.blit(label, (bx + 8, by + 5))
+
+        if wellDone_timer > 0:
+            msg = "Well done! You have completed Puzzle 1, more puzzles awaits you" if not puzzle2_done else "Well done! You have completed Puzzle 2, more puzzles awaits you"
+            msg_surf = prompt_font.render(msg, True, WHITE)
+            msg_bg = pygame.Surface((msg_surf.get_width() + 20, msg_surf.get_height() + 14), pygame.SRCALPHA)
+            msg_bg.fill((0, 0, 0, 180))
+            mx = SCREEN_WIDTH // 2 - msg_bg.get_width() // 2
+            my = SCREEN_HEIGHT // 2 - msg_bg.get_height() // 2
+            screen.blit(msg_bg, (mx, my))
+            screen.blit(msg_surf, (mx + 10, my + 7))
 
         if debug:
             for r in COLLISION_RECTS:

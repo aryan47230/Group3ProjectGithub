@@ -547,6 +547,12 @@ def run(ext_screen=None, ext_clock=None):
 
         pygame.display.flip()
 
+    if won:
+        import os
+        flag = os.path.join(os.path.dirname(os.path.abspath(__file__)), "puzzle2_complete.txt")
+        with open(flag, "w") as f:
+            f.write("complete")
+
     return result
 
 
