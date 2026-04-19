@@ -21,6 +21,12 @@ COLLISION_RECTS = [
     pygame.Rect(  0,   0, 800, 200),
     # left wall segment
     pygame.Rect(  0, 200,  50, 200),
+    # custom collision box (50,225) -> (150,250)
+    pygame.Rect( 50, 225, 100,  25),
+    # custom collision box (600,225) -> (800,250)
+    pygame.Rect(600, 225, 200,  25),
+    # custom collision box (700,250) -> (800,325)
+    pygame.Rect(700, 250, 100,  75),
     # central back staircase
     pygame.Rect(275,  75, 250, 195),
 ]
@@ -133,8 +139,32 @@ def main() -> None:
     coffee_img = pygame.image.load(
         "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/coffee.png"
     ).convert_alpha()
-    coffee_img = pygame.transform.scale(coffee_img, (38, 38))
+    coffee_img = pygame.transform.scale(coffee_img, (28, 28))
     coffee_rect = coffee_img.get_rect(topleft=(350, 410))
+
+    camera_img = pygame.image.load(
+        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/camera.png"
+    ).convert_alpha()
+    camera_img = pygame.transform.scale(camera_img, (20, 20))
+    camera_rect = camera_img.get_rect(topleft=(24, 561))
+
+    phone_img = pygame.image.load(
+        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/phone.webp"
+    ).convert_alpha()
+    phone_img = pygame.transform.scale(phone_img, (20, 20))
+    phone_rect = phone_img.get_rect(topleft=(560, 235))
+
+    receipt_img = pygame.image.load(
+        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/reciept.png"
+    ).convert_alpha()
+    receipt_img = pygame.transform.scale(receipt_img, (20, 20))
+    receipt_rect = receipt_img.get_rect(topleft=(610, 295))
+
+    clock_img = pygame.image.load(
+        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/clock (1).webp"
+    ).convert_alpha()
+    clock_img = pygame.transform.scale(clock_img, (10, 10))
+    clock_rect = clock_img.get_rect(topleft=(180, 245))
 
     player = Player(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
     all_sprites = pygame.sprite.Group(player)
@@ -206,6 +236,10 @@ def main() -> None:
         screen.blit(background_3rd if on_3rd_floor else background, (0, 0))
         draw_grid(screen)
         screen.blit(coffee_img, coffee_rect)
+        screen.blit(camera_img, camera_rect)
+        screen.blit(phone_img, phone_rect)
+        screen.blit(clock_img, clock_rect)
+        screen.blit(receipt_img, receipt_rect)
         all_sprites.draw(screen)
 
         if near_puzzle1:
