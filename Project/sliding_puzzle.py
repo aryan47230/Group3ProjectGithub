@@ -140,7 +140,13 @@ def draw_ui(won):
         bar.fill((140, 10, 20, 210))
         screen.blit(bar, (0, WINDOW_H - 40))
         msg = FONT_WIN.render("CASE SOLVED!", True, WIN_COL)
-        screen.blit(msg, msg.get_rect(center=(WINDOW_W // 2, WINDOW_H - 20)))
+        screen.blit(msg, msg.get_rect(center=(WINDOW_W // 2 - 70, WINDOW_H - 20)))
+        close_btn = pygame.Rect(WINDOW_W - 110, WINDOW_H - 34, 100, 26)
+        mouse = pygame.mouse.get_pos()
+        btn_col = (200, 60, 80) if close_btn.collidepoint(mouse) else (120, 30, 45)
+        pygame.draw.rect(screen, btn_col, close_btn, border_radius=4)
+        close_lbl = FONT_UI.render("Close", True, (255, 220, 220))
+        screen.blit(close_lbl, close_lbl.get_rect(center=close_btn.center))
 
 
 # ---------------------------------------------------------
@@ -196,7 +202,11 @@ def run(ext_screen=None, ext_clock=None):
                     running = False
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if not won and hover:
+                if won:
+                    close_btn = pygame.Rect(WINDOW_W - 110, WINDOW_H - 34, 100, 26)
+                    if close_btn.collidepoint(mouse):
+                        running = False
+                elif hover:
                     r, c = hover
                     if move(board, r, c):
                         if is_solved(board):

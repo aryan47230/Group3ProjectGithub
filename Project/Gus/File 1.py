@@ -27,8 +27,10 @@ COLLISION_RECTS = [
     pygame.Rect(600, 225, 200,  25),
     # custom collision box (700,250) -> (800,325)
     pygame.Rect(700, 250, 100,  75),
-    # central back staircase
-    pygame.Rect(275,  75, 250, 195),
+    # left staircase passage (blocked until puzzle 2 complete)
+    pygame.Rect(190, 150, 100, 150),
+    # full-width row y=450 to y=500
+    pygame.Rect(  0, 450, 800,  50),
 ]
 
 
@@ -138,7 +140,6 @@ def main() -> None:
     ).convert()
     background_2nd = pygame.transform.scale(background_2nd, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
-    FLOOR_TRIGGER = pygame.Rect(350, 200, 100, 100)   # near x=400, y=250
     on_3rd_floor = False
     on_2nd_floor = False
 
@@ -196,6 +197,7 @@ def main() -> None:
     BELL_TRIGGER      = pygame.Rect(380, 180, 40, 40)   # centred on (400, 200)
     MURDER_BOARD_PATH = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/rbenos2/murder_board.py"
     bell_launched = False
+    bell_message_timer = 0
 
     puzzle_procs = []   # track all active puzzle subprocesses
 
@@ -203,22 +205,25 @@ def main() -> None:
     all_sprites = pygame.sprite.Group(player)
     debug = False
 
-    PUZZLE1_TRIGGER = pygame.Rect(700, 350, 260, 65)
+    PUZZLE1_TRIGGER = pygame.Rect(635, 330, 40, 40)   # centred on (655, 350)
     SLIDING_PUZZLE_PATH = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/sliding_puzzle.py"
     PUZZLE1_FLAG = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/puzzle1_complete.txt"
 
-    PUZZLE2_TRIGGER = pygame.Rect(170, 320, 100, 80)   # near x=200, y=350
+    PUZZLE2_TRIGGER = pygame.Rect(165, 330, 40, 40)   # centred on (185, 350)
     CYPHER_PATH = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/cypher.py"
     PUZZLE2_FLAG = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/puzzle2_complete.txt"
 
-    STAIRCASE_RECT = pygame.Rect(275, 75, 250, 195)
+    LEFT_STAIRCASE_RECT = pygame.Rect(190, 150, 100, 150)
+    FLOOR_UP_TRIGGER    = pygame.Rect(375, 210, 40, 40)   # centred on (395, 230)
 
-    puzzle1_done = os.path.exists(PUZZLE1_FLAG)
-    puzzle2_done = os.path.exists(PUZZLE2_FLAG)
-    if puzzle2_done and STAIRCASE_RECT in COLLISION_RECTS:
-        COLLISION_RECTS.remove(STAIRCASE_RECT)
+    puzzle1_done     = os.path.exists(PUZZLE1_FLAG)
+    puzzle2_done     = os.path.exists(PUZZLE2_FLAG)
+    puzzle2_launched = puzzle2_done
+    if puzzle2_done and LEFT_STAIRCASE_RECT in COLLISION_RECTS:
+        COLLISION_RECTS.remove(LEFT_STAIRCASE_RECT)
 
     wellDone_timer = 0   # frames remaining to show completion message
+    next_floor_timer = 0  # frames remaining to show "move onto next floor" message
 
     prompt_font = pygame.font.SysFont("monospace", 13, bold=True)
 
@@ -231,16 +236,16 @@ def main() -> None:
         if not puzzle2_done and os.path.exists(PUZZLE2_FLAG):
             puzzle2_done = True
             wellDone_timer = FPS * 6
-            if STAIRCASE_RECT in COLLISION_RECTS:
-                COLLISION_RECTS.remove(STAIRCASE_RECT)
+            next_floor_timer = FPS * 6
+            if LEFT_STAIRCASE_RECT in COLLISION_RECTS:
+                COLLISION_RECTS.remove(LEFT_STAIRCASE_RECT)
 
-        near_puzzle1 = (not puzzle1_done) and PUZZLE1_TRIGGER.colliderect(player.rect)
-        near_puzzle2 = puzzle1_done and (not puzzle2_done) and PUZZLE2_TRIGGER.colliderect(player.rect)
+        on_library   = not on_3rd_floor and not on_2nd_floor
+        near_puzzle1 = on_library and (not puzzle1_done) and PUZZLE1_TRIGGER.colliderect(player.rect)
+        near_puzzle2 = on_library and puzzle1_done and (not puzzle2_launched) and PUZZLE2_TRIGGER.colliderect(player.rect)
         near_book    = timeline_completed and (not book_launched) and pygame.Rect(446, 381, 40, 40).colliderect(player.rect)
-        near_bell    = (not bell_launched) and BELL_TRIGGER.colliderect(player.rect)
-
-        if FLOOR_TRIGGER.colliderect(player.rect):
-            on_3rd_floor = True
+        near_floor_up = on_library and puzzle2_done and FLOOR_UP_TRIGGER.colliderect(player.rect)
+        near_bell    = on_2nd_floor and (not bell_launched) and BELL_TRIGGER.colliderect(player.rect)
 
         # Remove any puzzle subprocesses that just ended
         just_ended = [p for p in puzzle_procs if p.poll() is not None]
@@ -271,18 +276,25 @@ def main() -> None:
                     sys.exit()
                 if event.key == pygame.K_d:
                     debug = not debug
+                if event.key == pygame.K_e and near_floor_up:
+                    on_3rd_floor = True
+                    bottom_wall = pygame.Rect(0, 450, 800, 50)
+                    if bottom_wall in COLLISION_RECTS:
+                        COLLISION_RECTS.remove(bottom_wall)
                 if event.key == pygame.K_e and near_puzzle1:
                     puzzle_procs.append(subprocess.Popen(
                         [sys.executable, SLIDING_PUZZLE_PATH],
                         cwd="/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project"
                     ))
                 if event.key == pygame.K_e and near_puzzle2:
+                    puzzle2_launched = True
                     puzzle_procs.append(subprocess.Popen(
                         [sys.executable, CYPHER_PATH],
                         cwd="/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project"
                     ))
                 if event.key == pygame.K_e and near_bell:
                     bell_launched = True
+                    bell_message_timer = FPS * 3
                     puzzle_procs.append(subprocess.Popen(
                         [sys.executable, MURDER_BOARD_PATH],
                         cwd="/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/rbenos2"
@@ -311,8 +323,12 @@ def main() -> None:
 
         if wellDone_timer > 0:
             wellDone_timer -= 1
+        if next_floor_timer > 0:
+            next_floor_timer -= 1
         if all_collected_timer > 0:
             all_collected_timer -= 1
+        if bell_message_timer > 0:
+            bell_message_timer -= 1
 
         all_sprites.update()
 
@@ -322,10 +338,10 @@ def main() -> None:
             screen.blit(background_3rd, (0, 0))
         else:
             screen.blit(background, (0, 0))
-        draw_grid(screen)
 
-        # Draw collectibles and show "Press E" prompt when near
-        for idx, obj in enumerate(collectibles) if not on_2nd_floor else []:
+
+        # Draw collectibles and show "Press E" prompt when near (hidden on library floor)
+        for idx, obj in enumerate(collectibles) if on_3rd_floor else []:
             if collected[idx]:
                 continue
             screen.blit(obj["img"], obj["rect"])
@@ -343,7 +359,7 @@ def main() -> None:
         all_sprites.draw(screen)
 
         if near_puzzle1:
-            label = prompt_font.render("Puzzle 1  [Press E to open]", True, WHITE)
+            label = prompt_font.render("Press E to open puzzle", True, WHITE)
             bg = pygame.Surface((label.get_width() + 16, label.get_height() + 10), pygame.SRCALPHA)
             bg.fill((0, 0, 0, 160))
             bx = max(0, player.rect.centerx - bg.get_width() // 2)
@@ -354,7 +370,7 @@ def main() -> None:
             screen.blit(label, (bx + 8, by + 5))
 
         if near_puzzle2:
-            label = prompt_font.render("Puzzle 2  [Press E to open]", True, WHITE)
+            label = prompt_font.render("Press E to open puzzle", True, WHITE)
             bg = pygame.Surface((label.get_width() + 16, label.get_height() + 10), pygame.SRCALPHA)
             bg.fill((0, 0, 0, 160))
             bx = max(0, player.rect.centerx - bg.get_width() // 2)
@@ -366,6 +382,17 @@ def main() -> None:
 
         if near_bell:
             label = prompt_font.render("Ring Bell  [Press E]", True, WHITE)
+            bg = pygame.Surface((label.get_width() + 16, label.get_height() + 10), pygame.SRCALPHA)
+            bg.fill((0, 0, 0, 160))
+            bx = max(0, player.rect.centerx - bg.get_width() // 2)
+            by = player.rect.top - bg.get_height() - 8
+            if by < 0:
+                by = player.rect.bottom + 8
+            screen.blit(bg, (bx, by))
+            screen.blit(label, (bx + 8, by + 5))
+
+        if near_floor_up:
+            label = prompt_font.render("Move onto next floor  [Press E]", True, WHITE)
             bg = pygame.Surface((label.get_width() + 16, label.get_height() + 10), pygame.SRCALPHA)
             bg.fill((0, 0, 0, 160))
             bx = max(0, player.rect.centerx - bg.get_width() // 2)
@@ -396,6 +423,16 @@ def main() -> None:
             screen.blit(msg_bg, (mx, my))
             screen.blit(msg_surf, (mx + 10, my + 7))
 
+        if next_floor_timer > 0 and on_library:
+            msg = "Move onto the next floor!"
+            msg_surf = prompt_font.render(msg, True, (100, 255, 160))
+            msg_bg = pygame.Surface((msg_surf.get_width() + 20, msg_surf.get_height() + 14), pygame.SRCALPHA)
+            msg_bg.fill((0, 0, 0, 190))
+            nx = SCREEN_WIDTH // 2 - msg_bg.get_width() // 2
+            ny = 30
+            screen.blit(msg_bg, (nx, ny))
+            screen.blit(msg_surf, (nx + 10, ny + 7))
+
         if all_collected_timer > 0:
             msg = "All clues collected! The timeline puzzle has opened."
             msg_surf = prompt_font.render(msg, True, (255, 220, 80))
@@ -403,6 +440,16 @@ def main() -> None:
             msg_bg.fill((0, 0, 0, 190))
             nx = SCREEN_WIDTH // 2 - msg_bg.get_width() // 2
             ny = 60
+            screen.blit(msg_bg, (nx, ny))
+            screen.blit(msg_surf, (nx + 10, ny + 7))
+
+        if bell_message_timer > 0:
+            msg = "You rang the bell! The Murder Board has opened."
+            msg_surf = prompt_font.render(msg, True, (255, 180, 80))
+            msg_bg = pygame.Surface((msg_surf.get_width() + 20, msg_surf.get_height() + 14), pygame.SRCALPHA)
+            msg_bg.fill((0, 0, 0, 190))
+            nx = SCREEN_WIDTH // 2 - msg_bg.get_width() // 2
+            ny = 90
             screen.blit(msg_bg, (nx, ny))
             screen.blit(msg_surf, (nx + 10, ny + 7))
 

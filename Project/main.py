@@ -377,9 +377,13 @@ def main():
                     state = "menu"
                     pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_ARROW)
                 elif result == "done":
-                    hub   = InvestigationHub(SCREEN_W, SCREEN_H)
-                    state = "hub"
-                    pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_ARROW)
+                    import subprocess
+                    game_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                             "Gus", "File 1.py")
+                    subprocess.Popen([sys.executable, game_path],
+                                     cwd=os.path.dirname(game_path))
+                    pygame.quit()
+                    sys.exit()
             librarian.update(dt)
             librarian.draw(screen)
             pygame.display.flip()

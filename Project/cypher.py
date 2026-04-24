@@ -388,6 +388,12 @@ def draw_win_animation(t):
         if typewriter_idx >= len(FULL_DECODED):
             hdr = FONT_TITLE.render("[ TRANSMISSION DECODED ]", True, CORRECT)
             screen.blit(hdr, hdr.get_rect(center=(W // 2, 30)))
+            close_btn = pygame.Rect(W - 110, H - 34, 100, 26)
+            btn_col = (200, 60, 80) if close_btn.collidepoint(pygame.mouse.get_pos()) else (120, 30, 45)
+            pygame.draw.rect(screen, btn_col, close_btn, border_radius=4)
+            pygame.draw.rect(screen, CORRECT, close_btn, 1, border_radius=4)
+            close_lbl = FONT_SM.render("Close", True, (255, 220, 220))
+            screen.blit(close_lbl, close_lbl.get_rect(center=close_btn.center))
 
 # =============================================================
 #  GAME LOGIC
@@ -492,6 +498,12 @@ def run(ext_screen=None, ext_clock=None):
                 elif action == "quit":
                     result  = "menu"
                     running = False
+
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and won:
+                if win_phase == 2 and typewriter_idx >= len(FULL_DECODED):
+                    close_btn = pygame.Rect(W - 110, H - 34, 100, 26)
+                    if close_btn.collidepoint(mouse):
+                        running = False
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and not won:
                 for i in range(5):
