@@ -18,7 +18,7 @@ RED    = (220,  50,  50)
 # Press D in-game to show/hide them for tuning.
 COLLISION_RECTS = [
     # top wall
-    pygame.Rect(  0,   0, 800, 200),
+    pygame.Rect(  0,   0, 800, 150),
     # left wall segment
     pygame.Rect(  0, 200,  50, 200),
     # custom collision box (50,225) -> (150,250)
@@ -133,8 +133,14 @@ def main() -> None:
     ).convert()
     background_3rd = pygame.transform.scale(background_3rd, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
+    background_2nd = pygame.image.load(
+        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/2nd_floor_background_image.webp"
+    ).convert()
+    background_2nd = pygame.transform.scale(background_2nd, (SCREEN_WIDTH, SCREEN_HEIGHT))
+
     FLOOR_TRIGGER = pygame.Rect(350, 200, 100, 100)   # near x=400, y=250
     on_3rd_floor = False
+    on_2nd_floor = False
 
     coffee_img = pygame.image.load(
         "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/coffee.png"
@@ -165,6 +171,33 @@ def main() -> None:
     ).convert_alpha()
     clock_img = pygame.transform.scale(clock_img, (10, 10))
     clock_rect = clock_img.get_rect(topleft=(180, 245))
+
+    # Collectible objects: name, image, rect
+    collectibles = [
+        {"name": "Coffee Cup", "img": coffee_img,  "rect": coffee_rect},
+        {"name": "Camera",     "img": camera_img,  "rect": camera_rect},
+        {"name": "Phone",      "img": phone_img,   "rect": phone_rect},
+        {"name": "Receipt",    "img": receipt_img, "rect": receipt_rect},
+        {"name": "Clock",      "img": clock_img,   "rect": clock_rect},
+    ]
+    collected = [False] * len(collectibles)
+    COLLECT_RADIUS = 40   # pixels; how close the player must be to collect
+    timeline_launched   = False
+    timeline_proc       = None
+    timeline_completed  = False
+    all_collected_timer = 0   # frames to show "all collected" message
+
+    TIMELINE_PATH = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/spras30/secondroom_timeline"
+
+    RECONSTRUCTION_PATH = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/spras30/first_room_reconstruction"
+    book_launched = False
+    book_proc     = None
+
+    BELL_TRIGGER      = pygame.Rect(380, 180, 40, 40)   # centred on (400, 200)
+    MURDER_BOARD_PATH = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/rbenos2/murder_board.py"
+    bell_launched = False
+
+    puzzle_procs = []   # track all active puzzle subprocesses
 
     player = Player(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
     all_sprites = pygame.sprite.Group(player)
@@ -203,12 +236,33 @@ def main() -> None:
 
         near_puzzle1 = (not puzzle1_done) and PUZZLE1_TRIGGER.colliderect(player.rect)
         near_puzzle2 = puzzle1_done and (not puzzle2_done) and PUZZLE2_TRIGGER.colliderect(player.rect)
+        near_book    = timeline_completed and (not book_launched) and pygame.Rect(446, 381, 40, 40).colliderect(player.rect)
+        near_bell    = (not bell_launched) and BELL_TRIGGER.colliderect(player.rect)
 
         if FLOOR_TRIGGER.colliderect(player.rect):
             on_3rd_floor = True
 
+        # Remove any puzzle subprocesses that just ended
+        just_ended = [p for p in puzzle_procs if p.poll() is not None]
+        puzzle_procs[:] = [p for p in puzzle_procs if p.poll() is None]
+
+        # Detect when timeline puzzle is closed
+        if timeline_proc is not None and timeline_proc.poll() is not None:
+            timeline_completed = True
+            timeline_proc = None
+
+        # Switch to 2nd floor background when book puzzle is closed
+        if book_proc is not None and book_proc.poll() is not None:
+            on_2nd_floor = True
+            book_proc = None
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                # On macOS, closing a puzzle subprocess window fires a QUIT
+                # event in the parent.  Ignore it if a puzzle just closed.
+                if just_ended:
+                    just_ended.clear()
+                    continue
                 pygame.quit()
                 sys.exit()
             if event.type == pygame.KEYDOWN:
@@ -218,28 +272,74 @@ def main() -> None:
                 if event.key == pygame.K_d:
                     debug = not debug
                 if event.key == pygame.K_e and near_puzzle1:
-                    subprocess.Popen(
+                    puzzle_procs.append(subprocess.Popen(
                         [sys.executable, SLIDING_PUZZLE_PATH],
                         cwd="/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project"
-                    )
+                    ))
                 if event.key == pygame.K_e and near_puzzle2:
-                    subprocess.Popen(
+                    puzzle_procs.append(subprocess.Popen(
                         [sys.executable, CYPHER_PATH],
                         cwd="/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project"
+                    ))
+                if event.key == pygame.K_e and near_bell:
+                    bell_launched = True
+                    puzzle_procs.append(subprocess.Popen(
+                        [sys.executable, MURDER_BOARD_PATH],
+                        cwd="/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/rbenos2"
+                    ))
+                if event.key == pygame.K_e and near_book:
+                    book_launched = True
+                    book_proc = subprocess.Popen(
+                        [sys.executable, RECONSTRUCTION_PATH],
+                        cwd="/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/spras30"
                     )
+                    puzzle_procs.append(book_proc)
+                if event.key == pygame.K_e:
+                    for idx, obj in enumerate(collectibles):
+                        if not collected[idx]:
+                            if obj["rect"].inflate(COLLECT_RADIUS * 2, COLLECT_RADIUS * 2).colliderect(player.rect):
+                                collected[idx] = True
+                                if all(collected) and not timeline_launched:
+                                    timeline_launched = True
+                                    all_collected_timer = FPS * 3
+                                    timeline_proc = subprocess.Popen(
+                                        [sys.executable, TIMELINE_PATH],
+                                        cwd="/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/spras30"
+                                    )
+                                    puzzle_procs.append(timeline_proc)
+                                break
 
         if wellDone_timer > 0:
             wellDone_timer -= 1
+        if all_collected_timer > 0:
+            all_collected_timer -= 1
 
         all_sprites.update()
 
-        screen.blit(background_3rd if on_3rd_floor else background, (0, 0))
+        if on_2nd_floor:
+            screen.blit(background_2nd, (0, 0))
+        elif on_3rd_floor:
+            screen.blit(background_3rd, (0, 0))
+        else:
+            screen.blit(background, (0, 0))
         draw_grid(screen)
-        screen.blit(coffee_img, coffee_rect)
-        screen.blit(camera_img, camera_rect)
-        screen.blit(phone_img, phone_rect)
-        screen.blit(clock_img, clock_rect)
-        screen.blit(receipt_img, receipt_rect)
+
+        # Draw collectibles and show "Press E" prompt when near
+        for idx, obj in enumerate(collectibles) if not on_2nd_floor else []:
+            if collected[idx]:
+                continue
+            screen.blit(obj["img"], obj["rect"])
+            if obj["rect"].inflate(COLLECT_RADIUS * 2, COLLECT_RADIUS * 2).colliderect(player.rect):
+                hint_surf = prompt_font.render(f"{obj['name']}  [Press E to collect]", True, WHITE)
+                hint_bg = pygame.Surface((hint_surf.get_width() + 16, hint_surf.get_height() + 10), pygame.SRCALPHA)
+                hint_bg.fill((0, 0, 0, 160))
+                hx = max(0, min(obj["rect"].centerx - hint_bg.get_width() // 2, SCREEN_WIDTH - hint_bg.get_width()))
+                hy = obj["rect"].top - hint_bg.get_height() - 6
+                if hy < 0:
+                    hy = obj["rect"].bottom + 6
+                screen.blit(hint_bg, (hx, hy))
+                screen.blit(hint_surf, (hx + 8, hy + 5))
+
         all_sprites.draw(screen)
 
         if near_puzzle1:
@@ -264,6 +364,28 @@ def main() -> None:
             screen.blit(bg, (bx, by))
             screen.blit(label, (bx + 8, by + 5))
 
+        if near_bell:
+            label = prompt_font.render("Ring Bell  [Press E]", True, WHITE)
+            bg = pygame.Surface((label.get_width() + 16, label.get_height() + 10), pygame.SRCALPHA)
+            bg.fill((0, 0, 0, 160))
+            bx = max(0, player.rect.centerx - bg.get_width() // 2)
+            by = player.rect.top - bg.get_height() - 8
+            if by < 0:
+                by = player.rect.bottom + 8
+            screen.blit(bg, (bx, by))
+            screen.blit(label, (bx + 8, by + 5))
+
+        if near_book:
+            label = prompt_font.render("Read Book  [Press E]", True, WHITE)
+            bg = pygame.Surface((label.get_width() + 16, label.get_height() + 10), pygame.SRCALPHA)
+            bg.fill((0, 0, 0, 160))
+            bx = max(0, player.rect.centerx - bg.get_width() // 2)
+            by = player.rect.top - bg.get_height() - 8
+            if by < 0:
+                by = player.rect.bottom + 8
+            screen.blit(bg, (bx, by))
+            screen.blit(label, (bx + 8, by + 5))
+
         if wellDone_timer > 0:
             msg = "Well done! You have completed Puzzle 1, more puzzles awaits you" if not puzzle2_done else "Well done! You have completed Puzzle 2, more puzzles awaits you"
             msg_surf = prompt_font.render(msg, True, WHITE)
@@ -273,6 +395,16 @@ def main() -> None:
             my = SCREEN_HEIGHT // 2 - msg_bg.get_height() // 2
             screen.blit(msg_bg, (mx, my))
             screen.blit(msg_surf, (mx + 10, my + 7))
+
+        if all_collected_timer > 0:
+            msg = "All clues collected! The timeline puzzle has opened."
+            msg_surf = prompt_font.render(msg, True, (255, 220, 80))
+            msg_bg = pygame.Surface((msg_surf.get_width() + 20, msg_surf.get_height() + 14), pygame.SRCALPHA)
+            msg_bg.fill((0, 0, 0, 190))
+            nx = SCREEN_WIDTH // 2 - msg_bg.get_width() // 2
+            ny = 60
+            screen.blit(msg_bg, (nx, ny))
+            screen.blit(msg_surf, (nx + 10, ny + 7))
 
         if debug:
             for r in COLLISION_RECTS:

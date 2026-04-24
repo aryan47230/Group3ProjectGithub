@@ -3,6 +3,9 @@ import sys
 import time
 import math
 import random
+import os
+
+_DIR = os.path.dirname(os.path.abspath(__file__))
 
 pygame.init()
 
@@ -193,7 +196,7 @@ def alibi_btn_rect(i):
 #  CLUE LOADING
 # =============================================================
 def load_clue(filename, label, kind, img_w, img_h):
-    img  = pygame.transform.scale(pygame.image.load(filename), (img_w, img_h))
+    img  = pygame.transform.scale(pygame.image.load(os.path.join(_DIR, filename)), (img_w, img_h))
     pw   = img_w + PHOTO_PAD * 2
     ph   = img_h + PHOTO_PAD * 2 + 16
     surf = pygame.Surface((pw, ph))
@@ -661,11 +664,11 @@ def draw_evidence_panel():
     # ── Five photo slots ──────────────────────────────────────
     # Replace None with pygame.image.load("your_photo.png") for each slot
     EVIDENCE_PHOTOS = [
-        pygame.image.load("coffee_cup.png"),   # <-- slot 1: replace with pygame.image.load("evidence1.png")
-        pygame.image.load("iOLab_reciept.png"),   # <-- slot 2: replace with pygame.image.load("evidence2.png")
-        pygame.image.load("security_cam.png"),   # <-- slot 3: replace with pygame.image.load("evidence3.png")
-        pygame.image.load("broken_watch.png"),   # <-- slot 4: replace with pygame.image.load("evidence4.png")
-        pygame.image.load("call_log.png"),   # <-- slot 5: replace with pygame.image.load("evidence5.png")
+        pygame.image.load(os.path.join(_DIR, "coffee_cup.png")),
+        pygame.image.load(os.path.join(_DIR, "iOLab_reciept.png")),
+        pygame.image.load(os.path.join(_DIR, "security_cam.png")),
+        pygame.image.load(os.path.join(_DIR, "broken_watch.png")),
+        pygame.image.load(os.path.join(_DIR, "call_log.png")),
     ]
 
     slot_w, slot_h = 140, 140
@@ -762,7 +765,7 @@ evidence_open    = False
 #  WIN SCREEN
 # =============================================================
 # Load grainger image once so we don't reload every frame
-_grainger_img   = pygame.image.load("grainger_bob.png")
+_grainger_img   = pygame.image.load(os.path.join(_DIR, "grainger_bob.png"))
 _g_w, _g_h      = _grainger_img.get_size()
 _g_scale        = min((W * 0.65) / _g_w, (H - 180) / _g_h)
 _g_dw           = int(_g_w * _g_scale)
@@ -770,6 +773,8 @@ _g_dh           = int(_g_h * _g_scale)
 GRAINGER_SURF   = pygame.transform.scale(_grainger_img, (_g_dw, _g_dh))
 GRAINGER_IX     = W // 2 - _g_dw // 2
 GRAINGER_IY     = 170
+
+CLOSE_WIN_BTN = pygame.Rect(W//2 - 80, H - 52, 160, 34)
 
 def draw_win_screen():
     screen.fill((10,8,12))
@@ -787,11 +792,19 @@ def draw_win_screen():
     screen.blit(sub1, sub1.get_rect(center=(W//2, 115)))
     sub2 = FONT_SM.render("Ross Bob  —  Knife  —  By the Bell  —  8:23 PM", True, (160,140,110))
     screen.blit(sub2, sub2.get_rect(center=(W//2, 145)))
-    plaque = pygame.Rect(W//2-600, H-82, 1200, 52)
+    plaque = pygame.Rect(W//2-600, H-90, 1200, 52)
     pygame.draw.rect(screen, (80,65,20), plaque, border_radius=6)
     pygame.draw.rect(screen, (180,150,50), plaque, 2, border_radius=6)
     pt = FONT_MED.render('"In memory of Professor Grainger — A true educator. We build this statue in his honor, may be sit here, resting, at his favorite spot for eternity"', True, (240,210,100))
     screen.blit(pt, pt.get_rect(center=plaque.center))
+
+    if elapsed > 2.0:
+        mouse = pygame.mouse.get_pos()
+        btn_col = (80, 55, 14) if CLOSE_WIN_BTN.collidepoint(mouse) else (45, 32, 8)
+        pygame.draw.rect(screen, btn_col, CLOSE_WIN_BTN, border_radius=5)
+        pygame.draw.rect(screen, (180, 150, 50), CLOSE_WIN_BTN, 2, border_radius=5)
+        lbl = FONT_MED.render("Close", True, (240, 210, 160))
+        screen.blit(lbl, lbl.get_rect(center=CLOSE_WIN_BTN.center))
 
 # =============================================================
 #  MAIN LOOP
@@ -805,9 +818,13 @@ while running:
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            pygame.quit(); sys.exit()
+            running = False
 
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if phase == "win" and (now - win_start) > 2.0:
+                if CLOSE_WIN_BTN.collidepoint(mouse):
+                    running = False
+                    continue
 
             # --- alibi close button ---
             close_r = get_alibi_close_rect()
@@ -984,3 +1001,4 @@ while running:
     clock.tick(60)
 
 pygame.quit()
+sys.exit()

@@ -2,21 +2,13 @@ import pygame
 import math
 import os
 
-pygame.init()
-
 WIDTH, HEIGHT = 1280, 780
-WIN = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Grainger Bob – Bell Tower 2nd Floor")
 
 C_BG           = (18, 14, 10)
 C_TEXT         = (220, 200, 160)
 C_ACCENT       = (180, 120, 40)
 C_PANEL_BORDER = (120, 90, 40)
 C_FOUND        = (255, 220, 80)
-
-FONT_TITLE = pygame.font.SysFont("Georgia", 24, bold=True)
-FONT_BODY  = pygame.font.SysFont("Georgia", 16)
-FONT_SMALL = pygame.font.SysFont("Georgia", 12)
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -32,16 +24,12 @@ CLUE_LABELS = ["Phone Log", "iOLab Receipt", "Security Camera", "Broken Watch", 
 CLUE_TIMES  = ["7:45 PM", "8:23 PM", "9:47 PM", "3:55 AM", "12:31 AM"]
 CORRECT_ORDER = [0, 1, 2, 4, 3]
 
-CLUE_IMGS = []
-for _f in CLUE_FILES:
-    _p = os.path.join(script_dir, _f)
-    try:
-        CLUE_IMGS.append(pygame.image.load(_p).convert_alpha())
-    except Exception as _e:
-        print(f"Could not load {_p}: {_e}")
-        _s = pygame.Surface((400, 280))
-        _s.fill((60, 50, 40))
-        CLUE_IMGS.append(_s)
+# Initialised inside main() so importing this file never opens a window
+WIN        = None
+FONT_TITLE = None
+FONT_BODY  = None
+FONT_SMALL = None
+CLUE_IMGS  = []
 
 # ── Fit-scale helper ──────────────────────────────────────────────────────────
 def scale_fit(surf, target_w, target_h):
@@ -104,8 +92,18 @@ def home_rect(i):
     return pygame.Rect(x, y, CARD_W, CARD_H)
 
 # ── Draw main screen ──────────────────────────────────────────────────────────
+BACK_BTN = pygame.Rect(10, 8, 120, 28)
+
 def draw_floor2(state, pulse):
     WIN.fill(C_BG)
+
+    # ── back button ───────────────────────────────────────────────────────────
+    mouse = pygame.mouse.get_pos()
+    btn_col = (70, 50, 18) if BACK_BTN.collidepoint(mouse) else (40, 30, 10)
+    pygame.draw.rect(WIN, btn_col, BACK_BTN, border_radius=5)
+    pygame.draw.rect(WIN, C_ACCENT, BACK_BTN, 1, border_radius=5)
+    back_lbl = FONT_SMALL.render("\u2190  Back", True, C_TEXT)
+    WIN.blit(back_lbl, (BACK_BTN.x + 10, BACK_BTN.y + 8))
 
     # title + instruction
     title = FONT_TITLE.render("Bell Tower — 2nd Floor", True, C_ACCENT)
@@ -367,11 +365,41 @@ def draw_final_screen(state, pulse):
     footer = FONT_SMALL.render(
         "Use this timeline to piece together what happened that night.",
         True, (80, 68, 50))
-    WIN.blit(footer, (WIDTH // 2 - footer.get_width() // 2, HEIGHT - 30))
+    WIN.blit(footer, (WIDTH // 2 - footer.get_width() // 2, HEIGHT - 52))
+
+    close_btn = pygame.Rect(WIDTH // 2 - 80, HEIGHT - 38, 160, 30)
+    mouse = pygame.mouse.get_pos()
+    btn_col = (80, 55, 14) if close_btn.collidepoint(mouse) else (45, 32, 8)
+    draw_rounded_rect(WIN, btn_col, close_btn, radius=5, border=2, border_color=C_ACCENT)
+    close_lbl = FONT_BODY.render("Close", True, C_TEXT)
+    WIN.blit(close_lbl, (close_btn.centerx - close_lbl.get_width() // 2,
+                          close_btn.centery - close_lbl.get_height() // 2))
+    state["_close_final_btn"] = close_btn
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
+    global WIN, FONT_TITLE, FONT_BODY, FONT_SMALL, CLUE_IMGS
+
+    pygame.init()
+    WIN = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("Grainger Bob – Bell Tower 2nd Floor")
+
+    FONT_TITLE = pygame.font.SysFont("Georgia", 24, bold=True)
+    FONT_BODY  = pygame.font.SysFont("Georgia", 16)
+    FONT_SMALL = pygame.font.SysFont("Georgia", 12)
+
+    CLUE_IMGS = []
+    for _f in CLUE_FILES:
+        _p = os.path.join(script_dir, _f)
+        try:
+            CLUE_IMGS.append(pygame.image.load(_p).convert_alpha())
+        except Exception as _e:
+            print(f"Could not load {_p}: {_e}")
+            _s = pygame.Surface((400, 280))
+            _s.fill((60, 50, 40))
+            CLUE_IMGS.append(_s)
+
     clock = pygame.time.Clock()
     pulse = 0.0
 
@@ -382,10 +410,11 @@ def main():
         "bell_ringing": 0,
         "wrong_flash":  0,
         "solved":       False,
-        "_close_rect":  None,
-        "_prev_rect":   None,
-        "_next_rect":   None,
-        "_thumb_rects": [],
+        "_close_rect":       None,
+        "_prev_rect":        None,
+        "_next_rect":        None,
+        "_thumb_rects":      [],
+        "_close_final_btn":  None,
     }
 
     run = True
@@ -406,6 +435,13 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
+
+            # ── back button / ESC ─────────────────────────────────────────────
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                run = False
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if BACK_BTN.collidepoint(mx, my):
+                    run = False
 
             # ── inspect overlay input ─────────────────────────────────────────
             if state["inspect"] is not None:
@@ -439,6 +475,10 @@ def main():
                 continue   # block all other input while inspecting
 
             if state["solved"] and state["bell_ringing"] == 0:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    btn = state.get("_close_final_btn")
+                    if btn and btn.collidepoint(mx, my):
+                        run = False
                 continue
 
             # ── mouse down ────────────────────────────────────────────────────

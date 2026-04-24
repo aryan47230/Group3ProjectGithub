@@ -21,10 +21,7 @@ FONT_BODY  = pygame.font.SysFont("Georgia", 16)
 FONT_SMALL = pygame.font.SysFont("Georgia", 12)
 
 # ── Nazcaan Script glyphs (11x13 pixel grids) ────────────────────────────────
-# Carefully re-traced from the Nazcaan Script key image
 GLYPHS = {
-    # E — large leftward open spiral: arc sweeps counter-clockwise from top-right,
-    #     curls inward, exits left with a downward tail (like a backwards 'e')
     "E": [
         [1,0,0,0,0,0,0,1,0,0,0],
         [1,1,0,0,0,0,1,0,1,0,0],
@@ -40,10 +37,6 @@ GLYPHS = {
         [1,0,0,0,0,0,0,0,0,0,0],
         [1,0,0,0,0,0,0,0,0,0,0],
     ],
-    
-    # M — tilde/wave bar across top, two rounded loops hanging below,
-    #     like an 'm' with circular descenders
-    
     "M": [
         [0,0,0,0,1,1,1,1,0,0,0],
         [0,0,0,1,0,0,0,0,1,0,0],
@@ -59,8 +52,6 @@ GLYPHS = {
         [0,0,0,0,1,0,0,0,0,1,1],
         [0,0,0,1,0,0,0,0,0,0,1],
     ],
-    # A — large clockwise open spiral: starts top-right, sweeps around left side,
-    #     curls inward to centre, small hook tail at bottom-left
     "A": [
         [0,0,0,1,1,1,1,1,0,0,0],
         [0,0,1,0,0,0,0,0,1,0,0],
@@ -76,9 +67,6 @@ GLYPHS = {
         [0,1,0,0,0,0,0,0,0,0,0],
         [1,1,1,1,1,1,1,1,1,1,1],
     ],
-    
-    # S — two linked S-curves flowing downward: upper curve bends right then left,
-    #     lower curve mirrors it — like a flowing figure-8 on its side
     "S": [
         [0,0,0,1,0,0,0,0,0,0,0],
         [0,0,1,0,0,0,1,1,1,0,0],
@@ -94,8 +82,6 @@ GLYPHS = {
         [0,1,1,1,0,0,0,1,0,0,0],
         [0,0,0,0,0,0,1,0,0,0,0],
     ],
-    # X — trident shape: three upward prongs, vertical stem, horizontal crossbar,
-    #     two angled legs spreading downward-outward
     "X": [
         [0,0,0,0,0,0,0,0,0,0,0],
         [0,0,0,0,0,0,0,0,0,0,0],
@@ -165,6 +151,55 @@ for room in ROOMS:
         surf.fill((40, 35, 30))
         room["surface"] = surf
 
+# ── Collectible clue images (one per room) ────────────────────────────────────
+# Each image is hidden in a room — click it to collect it.
+# After all 5 are collected the timeline puzzle launches.
+COLLECT_FILES = [
+    "coffeecup.webp",                      # Room 0: Main Entrance
+    "iOLab checkout receipt.png",          # Room 1: CARE
+    "Broken watch stopped at a time.png",  # Room 2: Bell Tower
+    "Security camera still.png",           # Room 3: Balcony
+    "Phone call log.png",                  # Room 4: CBTF
+]
+COLLECT_LABELS = [
+    "Coffee Cup",
+    "iOLab Receipt",
+    "Broken Watch",
+    "Security Camera",
+    "Phone Log",
+]
+# Position as fraction of the room rect (cx_frac, cy_frac)
+COLLECT_POS = [
+    (0.72, 0.54),   # Room 0
+    (0.60, 0.42),   # Room 1
+    (0.55, 0.62),   # Room 2
+    (0.28, 0.52),   # Room 3
+    (0.65, 0.46),   # Room 4
+]
+COLLECT_SIZE = (62, 50)   # display size inside the room tile
+
+COLLECT_IMGS = []
+for _f in COLLECT_FILES:
+    _p = os.path.join(script_dir, _f)
+    try:
+        _img = pygame.image.load(_p).convert_alpha()
+        COLLECT_IMGS.append(pygame.transform.smoothscale(_img, COLLECT_SIZE))
+    except Exception as _e:
+        print(f"Could not load collectible {_p}: {_e}")
+        _s = pygame.Surface(COLLECT_SIZE)
+        _s.fill((200, 150, 50))
+        COLLECT_IMGS.append(_s)
+
+def collect_rect(room_idx):
+    """Returns the screen rect for the collectible image in that room."""
+    r  = ROOM_RECTS[room_idx]
+    rw = r.width
+    rh = r.height
+    cw, ch = COLLECT_SIZE
+    cx = r.x + int(COLLECT_POS[room_idx][0] * rw) - cw // 2
+    cy = r.y + int(COLLECT_POS[room_idx][1] * rh) - ch // 2
+    return pygame.Rect(cx, cy, cw, ch)
+
 # ── room-finding screen layout ────────────────────────────────────────────────
 PAD = 16
 TOP_Y = 68
@@ -201,7 +236,7 @@ def draw_rounded_rect(surface, color, rect, radius=6, border=0, border_color=Non
         pygame.draw.rect(surface, border_color, rect, border, border_radius=radius)
 
 # ── draw rooms (finding phase) ────────────────────────────────────────────────
-def draw_rooms(hover_idx, flash_timers):
+def draw_rooms(hover_idx, flash_timers, clue_collected, pulse):
     for i, room in enumerate(ROOMS):
         r = ROOM_RECTS[i]
         rw, rh = room_size(i)
@@ -233,30 +268,57 @@ def draw_rooms(hover_idx, flash_timers):
             WIN.blit(flash_surf, r.topleft)
 
         if room["found"]:
-            tag = FONT_SMALL.render("✓ found", True, C_FOUND)
+            tag = FONT_SMALL.render("found", True, C_FOUND)
             tag_bg = pygame.Surface((tag.get_width()+6, tag.get_height()+2), pygame.SRCALPHA)
             tag_bg.fill((0,0,0,140))
             WIN.blit(tag_bg, (r.right - tag.get_width() - 8, r.y+3))
             WIN.blit(tag, (r.right - tag.get_width() - 5, r.y+4))
 
-def draw_hud():
-    found = sum(1 for r in ROOMS if r["found"])
-    bar = pygame.Surface((WIDTH,52), pygame.SRCALPHA)
-    bar.fill((10,8,5,215))
-    WIN.blit(bar,(0,0))
+        # ── draw collectible clue image ───────────────────────────────────────
+        if not clue_collected[i]:
+            cr = collect_rect(i)
+            WIN.blit(COLLECT_IMGS[i], cr.topleft)
+            # pulsing gold border to draw attention
+            gc = int(180 + 60 * math.sin(pulse * 3 + i))
+            pygame.draw.rect(WIN, (gc, gc // 2, 20), cr.inflate(4, 4), 2, border_radius=4)
+            # small "collect" hint
+            hint = FONT_SMALL.render("click to collect", True, (200, 170, 60))
+            hbg  = pygame.Surface((hint.get_width() + 4, hint.get_height() + 2), pygame.SRCALPHA)
+            hbg.fill((0, 0, 0, 160))
+            hint_x = max(r.x + 2, cr.x - 2)
+            hint_y = cr.y - hint.get_height() - 4
+            hint_y = max(r.y + 2, hint_y)
+            WIN.blit(hbg,  (hint_x, hint_y))
+            WIN.blit(hint, (hint_x + 2, hint_y + 1))
+        else:
+            # show a small checkmark badge where the clue was
+            tag = FONT_SMALL.render("collected", True, (100, 220, 100))
+            tag_bg = pygame.Surface((tag.get_width()+6, tag.get_height()+2), pygame.SRCALPHA)
+            tag_bg.fill((0,0,0,130))
+            cr = collect_rect(i)
+            WIN.blit(tag_bg, (cr.x, cr.y))
+            WIN.blit(tag,    (cr.x + 3, cr.y + 1))
+
+
+def draw_hud(clue_collected):
+    found_glyphs  = sum(1 for r in ROOMS if r["found"])
+    found_clues   = sum(clue_collected)
+    bar = pygame.Surface((WIDTH, 52), pygame.SRCALPHA)
+    bar.fill((10, 8, 5, 215))
+    WIN.blit(bar, (0, 0))
     title = FONT_TITLE.render("ROOM RECONSTRUCTION  ·  Find all 5 hidden symbols", True, C_ACCENT)
-    WIN.blit(title,(20,14))
-    prog = FONT_BODY.render(f"{found} / 5  symbols found", True, C_TEXT)
-    WIN.blit(prog,(WIDTH-prog.get_width()-20,17))
+    WIN.blit(title, (20, 14))
+    prog = FONT_BODY.render(f"Glyphs: {found_glyphs}/5   Clues: {found_clues}/5", True, C_TEXT)
+    WIN.blit(prog, (WIDTH - prog.get_width() - 20, 17))
 
 def draw_bottom_bar():
-    bar = pygame.Surface((WIDTH,44), pygame.SRCALPHA)
-    bar.fill((10,8,5,215))
-    WIN.blit(bar,(0,HEIGHT-44))
+    bar = pygame.Surface((WIDTH, 44), pygame.SRCALPHA)
+    bar.fill((10, 8, 5, 215))
+    WIN.blit(bar, (0, HEIGHT - 44))
     hint = FONT_SMALL.render(
-        "Symbols are hidden in each room — look carefully.  Use the Nazcaän cipher book to decode.",
-        True,(100,85,60))
-    WIN.blit(hint,(20,HEIGHT-29))
+        "Symbols are hidden in each room — look carefully.  Collect all clue images to proceed.",
+        True, (100, 85, 60))
+    WIN.blit(hint, (20, HEIGHT - 29))
 
 # ── collection screen layout ──────────────────────────────────────────────────
 PANEL_W, PANEL_H = 210, 200
@@ -276,8 +338,8 @@ SLOT_RECTS  = [
     for i in range(5)
 ]
 
-# Key button — bottom-right corner
-KEY_BTN = pygame.Rect(WIDTH - 170, HEIGHT - 86, 158, 44)
+KEY_BTN   = pygame.Rect(WIDTH - 170, HEIGHT - 86, 158, 44)
+CLOSE_BTN = pygame.Rect(12,          HEIGHT - 86, 158, 44)
 
 
 def panel_rect(i):
@@ -287,11 +349,9 @@ def panel_rect(i):
 def draw_collection_screen(pulse, answer_slots, drag, show_key, key_img):
     WIN.fill((12, 9, 6))
 
-    # title
     title = FONT_TITLE.render("ALL SYMBOLS COLLECTED", True, C_ACCENT)
     WIN.blit(title, (WIDTH // 2 - title.get_width() // 2, 24))
 
-    # ── symbol panels ─────────────────────────────────────────────────────────
     for i, room in enumerate(ROOMS):
         r = panel_rect(i)
         is_dragging = drag is not None and drag["panel"] == i
@@ -302,18 +362,15 @@ def draw_collection_screen(pulse, answer_slots, drag, show_key, key_img):
         border_col = (200, 170, 60) if is_dragging else C_PANEL_BORDER
         pygame.draw.rect(WIN, border_col, r, 2, border_radius=8)
 
-        # thumbnail
         thumb = pygame.transform.scale(room["surface"], (PANEL_W - 8, 75))
         WIN.blit(thumb, (r.x + 4, r.y + 22))
 
-        # label
         lbl_surf = FONT_SMALL.render(room["label"], True, (120, 100, 70))
         lbl_bg = pygame.Surface((lbl_surf.get_width() + 4, lbl_surf.get_height() + 2), pygame.SRCALPHA)
         lbl_bg.fill((0, 0, 0, 160))
         WIN.blit(lbl_bg, (r.x + PANEL_W // 2 - lbl_surf.get_width() // 2 - 2, r.y + 6))
         WIN.blit(lbl_surf, (r.x + PANEL_W // 2 - lbl_surf.get_width() // 2, r.y + 8))
 
-        # glyph
         gx = r.x + PANEL_W // 2 - (GLYPH_COLS * 5) // 2
         gy = r.y + 105
         glyph_col = (100, 85, 50) if is_dragging else C_FOUND
@@ -324,7 +381,6 @@ def draw_collection_screen(pulse, answer_slots, drag, show_key, key_img):
             WIN.blit(glow, (gx - 7, gy - 7))
         draw_glyph(WIN, room["glyph_key"], gx, gy, cell=5, color=glyph_col)
 
-        # slot indicator or drag hint
         in_slot = None
         for slot_i, slot_val in enumerate(answer_slots):
             if slot_val == i:
@@ -337,7 +393,6 @@ def draw_collection_screen(pulse, answer_slots, drag, show_key, key_img):
             hint = FONT_SMALL.render("drag to a slot", True, (70, 58, 40))
             WIN.blit(hint, (r.x + PANEL_W // 2 - hint.get_width() // 2, r.y + PANEL_H - 18))
 
-    # ── answer slots ──────────────────────────────────────────────────────────
     slots_label = FONT_BODY.render("Drag symbols into the slots to spell the location:", True, C_TEXT)
     WIN.blit(slots_label, (WIDTH // 2 - slots_label.get_width() // 2, SLOT_Y - 26))
 
@@ -356,10 +411,10 @@ def draw_collection_screen(pulse, answer_slots, drag, show_key, key_img):
             gx = srect.x + srect.w // 2 - (GLYPH_COLS * 4) // 2
             gy = srect.y + srect.h // 2 - (GLYPH_ROWS * 4) // 2
             draw_glyph(WIN, ROOMS[panel_i]["glyph_key"], gx, gy, cell=4, color=C_FOUND)
-            x_lbl = FONT_SMALL.render("✕", True, (160, 80, 60))
+            x_lbl = FONT_SMALL.render("x", True, (160, 80, 60))
             WIN.blit(x_lbl, (srect.right - x_lbl.get_width() - 4, srect.y + 4))
         else:
-            ph = FONT_SMALL.render("?", True, (60, 50, 35))
+            ph = FONT_BODY.render("?", True, (60, 50, 35))
             WIN.blit(ph, (srect.centerx - ph.get_width() // 2,
                           srect.centery - ph.get_height() // 2))
 
@@ -368,7 +423,6 @@ def draw_collection_screen(pulse, answer_slots, drag, show_key, key_img):
         True, (80, 68, 50))
     WIN.blit(instr, (WIDTH // 2 - instr.get_width() // 2, SLOT_Y + SLOT_H + 12))
 
-    # ── floating ghost while dragging ─────────────────────────────────────────
     if drag is not None:
         i  = drag["panel"]
         gx = drag["mx"] - (GLYPH_COLS * 5) // 2
@@ -378,14 +432,20 @@ def draw_collection_screen(pulse, answer_slots, drag, show_key, key_img):
         WIN.blit(ghost, (gx - 3, gy - 3))
         draw_glyph(WIN, ROOMS[i]["glyph_key"], gx, gy, cell=5, color=(255, 235, 110))
 
-    # ── key button — bottom-right ──────────────────────────────────────────────
     btn_col = (100, 70, 22) if show_key else (55, 38, 12)
     draw_rounded_rect(WIN, btn_col, KEY_BTN, radius=6, border=2, border_color=C_ACCENT)
-    key_lbl = FONT_BODY.render("📖  Nazcaän Key", True, C_TEXT)
+    key_lbl = FONT_BODY.render("Nazcaan Key", True, C_TEXT)
     WIN.blit(key_lbl, (KEY_BTN.x + KEY_BTN.w // 2 - key_lbl.get_width() // 2,
                         KEY_BTN.y + KEY_BTN.h // 2 - key_lbl.get_height() // 2))
 
-    # ── key overlay ───────────────────────────────────────────────────────────
+    if all(s is not None for s in answer_slots):
+        mouse = pygame.mouse.get_pos()
+        close_col = (80, 30, 30) if CLOSE_BTN.collidepoint(mouse) else (50, 18, 18)
+        draw_rounded_rect(WIN, close_col, CLOSE_BTN, radius=6, border=2, border_color=(200, 80, 60))
+        close_lbl = FONT_BODY.render("Close Puzzle", True, C_TEXT)
+        WIN.blit(close_lbl, (CLOSE_BTN.x + CLOSE_BTN.w // 2 - close_lbl.get_width() // 2,
+                              CLOSE_BTN.y + CLOSE_BTN.h // 2 - close_lbl.get_height() // 2))
+
     if show_key and key_img is not None:
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 185))
@@ -398,7 +458,7 @@ def draw_collection_screen(pulse, answer_slots, drag, show_key, key_img):
         WIN.blit(key_scaled, (kx, ky))
         pygame.draw.rect(WIN, C_ACCENT, (kx, ky, kw, kh), 2, border_radius=6)
 
-        close = FONT_BODY.render("✕  close", True, C_TEXT)
+        close = FONT_BODY.render("x  close", True, C_TEXT)
         close_rect = pygame.Rect(kx + kw - close.get_width() - 16, ky + 8,
                                   close.get_width() + 12, close.get_height() + 6)
         pygame.draw.rect(WIN, (70, 45, 14), close_rect, border_radius=4)
@@ -413,9 +473,12 @@ def main():
     all_found    = False
     hover_idx    = None
 
-    answer_slots = [None] * 5   # slot index → ROOMS index or None
-    drag         = None          # None or {"panel": i, "mx": x, "my": y}
-    show_key     = False
+    answer_slots    = [None] * 5
+    drag            = None
+    show_key        = False
+
+    # Collectible clue tracking
+    clue_collected = [False] * 5
 
     key_img_path = os.path.join(script_dir, "nazcaanscriptkey.jpg")
     try:
@@ -423,6 +486,10 @@ def main():
     except Exception as e:
         print(f"Could not load key image: {e}")
         key_img = None
+
+    # Reset glyph state each time main() is called
+    for room in ROOMS:
+        room["found"] = False
 
     run = True
     while run:
@@ -438,12 +505,29 @@ def main():
             if flash_timers[k] <= 0:
                 del flash_timers[k]
 
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
 
-            # ── room-finding phase ────────────────────────────────────────────
+            # ── close button (collection screen, all slots filled) ─────────────
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and all_found:
+                if all(s is not None for s in answer_slots) and CLOSE_BTN.collidepoint(mx, my):
+                    run = False
+
+            # ── room-finding phase ─────────────────────────────────────────────
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and not all_found:
+                # Check collectible clue clicks first
+                for i in range(5):
+                    if not clue_collected[i]:
+                        cr = collect_rect(i)
+                        if cr.inflate(6, 6).collidepoint(mx, my):
+                            clue_collected[i] = True
+                            flash_timers[i]   = 40
+                            # all clues collected — placeholder for future trigger
+                            break
+
+                # Check glyph clicks
                 for i, room in enumerate(ROOMS):
                     if not room["found"]:
                         hit = glyph_screen_rect(i).inflate(16, 16)
@@ -453,9 +537,8 @@ def main():
                             if all(r["found"] for r in ROOMS):
                                 all_found = True
 
-            # ── collection screen: mouse down ─────────────────────────────────
+            # ── collection screen: mouse down ──────────────────────────────────
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and all_found:
-                # key overlay: only close button or key button responds
                 if show_key:
                     kw, kh = 340, 550
                     kx = WIDTH // 2 - kw // 2
@@ -469,27 +552,25 @@ def main():
                     show_key = True
                     continue
 
-                # start drag from a panel
                 for i in range(5):
                     if panel_rect(i).collidepoint(mx, my):
                         drag = {"panel": i, "mx": mx, "my": my}
                         break
 
-            # ── collection screen: mouse up — drop ────────────────────────────
+            # ── collection screen: mouse up ────────────────────────────────────
             if event.type == pygame.MOUSEBUTTONUP and event.button == 1 and all_found and drag is not None:
                 for s, srect in enumerate(SLOT_RECTS):
                     if srect.collidepoint(mx, my):
                         existing = answer_slots[s]
-                        # remove dragged panel from its old slot if it was placed
                         for s2 in range(5):
                             if answer_slots[s2] == drag["panel"]:
-                                answer_slots[s2] = existing  # swap displaced glyph back
+                                answer_slots[s2] = existing
                                 break
                         answer_slots[s] = drag["panel"]
                         break
                 drag = None
 
-            # ── right-click slot to clear ─────────────────────────────────────
+            # ── right-click slot to clear ──────────────────────────────────────
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3 and all_found:
                 for s, srect in enumerate(SLOT_RECTS):
                     if srect.collidepoint(mx, my):
@@ -515,13 +596,15 @@ def main():
         if all_found:
             draw_collection_screen(pulse, answer_slots, drag, show_key, key_img)
         else:
-            draw_rooms(hover_idx, flash_timers)
-            draw_hud()
+            draw_rooms(hover_idx, flash_timers, clue_collected, pulse)
+            draw_hud(clue_collected)
             draw_bottom_bar()
 
         pygame.display.update()
 
+
     pygame.quit()
+
 
 if __name__ == "__main__":
     main()
