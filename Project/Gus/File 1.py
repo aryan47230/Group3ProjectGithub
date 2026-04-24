@@ -120,10 +120,77 @@ def draw_grid(surface: pygame.Surface, cell: int = 50) -> None:
 
 def main() -> None:
     pygame.init()
+
+    # Always start fresh — remove completion flags from any previous run
+    for _flag in [
+        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/puzzle1_complete.txt",
+        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/puzzle2_complete.txt",
+    ]:
+        if os.path.exists(_flag):
+            os.remove(_flag)
+
+    _parent = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    sys.path.insert(0, _parent)
+    from menu import Menu
+    from main import LibrarianDialogue
+
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("Basic Player Movement")
+    pygame.display.set_caption("Grainger Mystery")
     clock = pygame.time.Clock()
     font  = pygame.font.SysFont("monospace", 16)
+
+    # --- MENU ---
+    menu = Menu(SCREEN_WIDTH, SCREEN_HEIGHT)
+    in_menu = True
+    while in_menu:
+        dt = clock.tick(60)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit(); sys.exit()
+            action = menu.handle_event(event)
+            if action == "start":
+                in_menu = False
+            elif action == "quit":
+                pygame.quit(); sys.exit()
+        if in_menu:
+            menu.update(dt)
+            menu.draw(screen)
+            pygame.display.flip()
+
+    # --- LIBRARIAN DIALOGUE ---
+    librarian = LibrarianDialogue(SCREEN_WIDTH, SCREEN_HEIGHT)
+    in_dialogue = True
+    while in_dialogue:
+        dt = clock.tick(60)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit(); sys.exit()
+            result = librarian.handle_event(event)
+            if result == "menu":
+                # restart menu
+                menu = Menu(SCREEN_WIDTH, SCREEN_HEIGHT)
+                in_menu = True
+                while in_menu:
+                    dt = clock.tick(60)
+                    for ev in pygame.event.get():
+                        if ev.type == pygame.QUIT:
+                            pygame.quit(); sys.exit()
+                        action = menu.handle_event(ev)
+                        if action == "start":
+                            in_menu = False
+                        elif action == "quit":
+                            pygame.quit(); sys.exit()
+                    if in_menu:
+                        menu.update(dt)
+                        menu.draw(screen)
+                        pygame.display.flip()
+                librarian = LibrarianDialogue(SCREEN_WIDTH, SCREEN_HEIGHT)
+            elif result == "done":
+                in_dialogue = False
+        if in_dialogue:
+            librarian.update(dt)
+            librarian.draw(screen)
+            pygame.display.flip()
 
     background = pygame.image.load(
         "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/library.png"
