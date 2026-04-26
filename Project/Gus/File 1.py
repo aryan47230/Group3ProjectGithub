@@ -2,6 +2,13 @@ import pygame
 import sys
 import subprocess
 import os
+from pathlib import Path
+
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
+
+# Get the current script's directory
+current_directory = Path(__file__).parent.parent.parent
 
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
@@ -45,7 +52,7 @@ ANIM_SPEED    = 8   # game ticks per frame
 class Player(pygame.sprite.Sprite):
     def __init__(self, x: int, y: int):
         super().__init__()
-        sheet = pygame.image.load("/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/Sprites/Males/M_03.png").convert()
+        sheet = pygame.image.load(current_directory / "project" / "Gus" / "Sprites" / "Males" / "M_03.png").convert()
         sheet.set_colorkey(sheet.get_at((0, 0)))
         self.sheet = sheet
 
@@ -123,8 +130,8 @@ def main() -> None:
 
     # Always start fresh — remove completion flags from any previous run
     for _flag in [
-        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/puzzle1_complete.txt",
-        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/puzzle2_complete.txt",
+        current_directory / "project" / "puzzle1_complete.txt",
+        current_directory / "project" / "puzzle2_complete.txt",
     ]:
         if os.path.exists(_flag):
             os.remove(_flag)
@@ -193,17 +200,17 @@ def main() -> None:
             pygame.display.flip()
 
     background = pygame.image.load(
-        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/library.png"
+        current_directory / "project" / "Gus" / "library.png"
     ).convert()
     background = pygame.transform.scale(background, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
     background_3rd = pygame.image.load(
-        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/dark_3rd_floor.png"
+        current_directory / "project" / "Gus" / "dark_3rd_floor.png"
     ).convert()
     background_3rd = pygame.transform.scale(background_3rd, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
     background_2nd = pygame.image.load(
-        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/2nd_floor_background_image.webp"
+        current_directory / "project" / "Gus" / "2nd_floor_background_image.webp"
     ).convert()
     background_2nd = pygame.transform.scale(background_2nd, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
@@ -211,31 +218,31 @@ def main() -> None:
     on_2nd_floor = False
 
     coffee_img = pygame.image.load(
-        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/coffee.png"
+        current_directory / "project" / "Gus" / "coffee.png"
     ).convert_alpha()
     coffee_img = pygame.transform.scale(coffee_img, (28, 28))
     coffee_rect = coffee_img.get_rect(topleft=(350, 410))
 
     camera_img = pygame.image.load(
-        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/camera.png"
+        current_directory / "project" / "Gus" / "camera.png"
     ).convert_alpha()
     camera_img = pygame.transform.scale(camera_img, (20, 20))
     camera_rect = camera_img.get_rect(topleft=(24, 561))
 
     phone_img = pygame.image.load(
-        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/phone.webp"
+        current_directory / "project" / "Gus" / "phone.webp"
     ).convert_alpha()
     phone_img = pygame.transform.scale(phone_img, (20, 20))
     phone_rect = phone_img.get_rect(topleft=(560, 235))
 
     receipt_img = pygame.image.load(
-        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/reciept.png"
+        current_directory / "project" / "Gus" / "receipt.png"
     ).convert_alpha()
     receipt_img = pygame.transform.scale(receipt_img, (20, 20))
     receipt_rect = receipt_img.get_rect(topleft=(610, 295))
 
     clock_img = pygame.image.load(
-        "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/Gus/clock (1).webp"
+        current_directory / "project" / "Gus" / "clock (1).webp"
     ).convert_alpha()
     clock_img = pygame.transform.scale(clock_img, (10, 10))
     clock_rect = clock_img.get_rect(topleft=(180, 245))
@@ -255,14 +262,14 @@ def main() -> None:
     timeline_completed  = False
     all_collected_timer = 0   # frames to show "all collected" message
 
-    TIMELINE_PATH = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/spras30/secondroom_timeline"
+    TIMELINE_PATH = current_directory / "project" / "spras30" / "secondroom_timeline"
 
-    RECONSTRUCTION_PATH = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/spras30/first_room_reconstruction"
+    RECONSTRUCTION_PATH = current_directory / "project" / "spras30" / "first_room_reconstruction"
     book_launched = False
     book_proc     = None
 
     BELL_TRIGGER      = pygame.Rect(380, 180, 40, 40)   # centred on (400, 200)
-    MURDER_BOARD_PATH = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/rbenos2/murder_board.py"
+    MURDER_BOARD_PATH = current_directory / "project" / "rbenos2" / "murder_board.py"
     bell_launched = False
     bell_message_timer = 0
 
@@ -273,12 +280,12 @@ def main() -> None:
     debug = False
 
     PUZZLE1_TRIGGER = pygame.Rect(635, 330, 40, 40)   # centred on (655, 350)
-    SLIDING_PUZZLE_PATH = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/sliding_puzzle.py"
-    PUZZLE1_FLAG = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/puzzle1_complete.txt"
+    SLIDING_PUZZLE_PATH = current_directory / "project" / "sliding_puzzle.py"
+    PUZZLE1_FLAG = current_directory / "project" / "puzzle1_complete.txt"
 
     PUZZLE2_TRIGGER = pygame.Rect(165, 330, 40, 40)   # centred on (185, 350)
-    CYPHER_PATH = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/cypher.py"
-    PUZZLE2_FLAG = "/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/puzzle2_complete.txt"
+    CYPHER_PATH = current_directory / "project" / "cypher.py"
+    PUZZLE2_FLAG = current_directory / "project" / "puzzle2_complete.txt"
 
     LEFT_STAIRCASE_RECT = pygame.Rect(190, 150, 100, 150)
     FLOOR_UP_TRIGGER    = pygame.Rect(375, 210, 40, 40)   # centred on (395, 230)
@@ -351,26 +358,26 @@ def main() -> None:
                 if event.key == pygame.K_e and near_puzzle1:
                     puzzle_procs.append(subprocess.Popen(
                         [sys.executable, SLIDING_PUZZLE_PATH],
-                        cwd="/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project"
+                        cwd=current_directory / "project"
                     ))
                 if event.key == pygame.K_e and near_puzzle2:
                     puzzle2_launched = True
                     puzzle_procs.append(subprocess.Popen(
                         [sys.executable, CYPHER_PATH],
-                        cwd="/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project"
+                        cwd=current_directory / "project"
                     ))
                 if event.key == pygame.K_e and near_bell:
                     bell_launched = True
                     bell_message_timer = FPS * 3
                     puzzle_procs.append(subprocess.Popen(
                         [sys.executable, MURDER_BOARD_PATH],
-                        cwd="/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/rbenos2"
+                        cwd=current_directory / "project" / "rbenos2"
                     ))
                 if event.key == pygame.K_e and near_book:
                     book_launched = True
                     book_proc = subprocess.Popen(
                         [sys.executable, RECONSTRUCTION_PATH],
-                        cwd="/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/spras30"
+                        cwd=current_directory / "project" / "spras30"
                     )
                     puzzle_procs.append(book_proc)
                 if event.key == pygame.K_e:
@@ -383,7 +390,7 @@ def main() -> None:
                                     all_collected_timer = FPS * 3
                                     timeline_proc = subprocess.Popen(
                                         [sys.executable, TIMELINE_PATH],
-                                        cwd="/Users/gus/Library/CloudStorage/OneDrive-UniversityofIllinois-Urbana/CS honor/Group3ProjectGithub/Project/spras30"
+                                        cwd=current_directory / "project" / "spras30"
                                     )
                                     puzzle_procs.append(timeline_proc)
                                 break
